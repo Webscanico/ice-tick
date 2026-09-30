@@ -77,6 +77,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .tele-val.red   { color: var(--red); }
 .tele-val.amber { color: var(--amber); }
 .tele-lbl { font-size: 11px; color: var(--text2); margin-top: 4px; }
+/* Сервисная полоска. Не плитки: подписи длинные, в колонку шириной в пол-экрана
+   они переносятся на две строки и блок раздувается. Строкой «подпись — число»
+   компактнее и читается слева направо, как в паспорте прибора. */
+#svc-block { background: var(--bg3); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; }
+.svc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.svc-lbl { font-size: 12px; color: var(--text2); }
+.svc-val { font-size: 15px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+/* Карточка прибора в блоке обратной связи: показываем ровно тот текст, что
+   уйдёт вместе с сообщением. Скрытого сбора нет — человек видит всё. */
+#fb-card { background: var(--bg3); border-radius: 8px; padding: 10px 12px; margin: 6px 0 0;
+           font-size: 11px; line-height: 1.45; color: var(--text2);
+           white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
 
 /* STATUS BAR */
 .status-bar { display: flex; align-items: center; gap: 8px; background: var(--bg3); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
@@ -274,6 +286,10 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         <button class="btn btn-start" onclick="sendStart()">▶ Старт</button>
         <button class="btn btn-stop"  onclick="sendStop()">■ Стоп</button>
       </div>
+      <div id="svc-block" style="display:none">
+        <div class="svc-row"><span class="svc-lbl">Время, не идущее в счёт жизни</span><span class="svc-val" id="svc-hours">—</span></div>
+        <div class="svc-row"><span class="svc-lbl">Счётчик надежды</span><span class="svc-val" id="svc-mileage">—</span></div>
+      </div>
     </div>
 
     <!-- ПРЕСЕТЫ -->
@@ -359,6 +375,27 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
         </div>
       </div>
 
+      <!-- Видна, только пока прибор ни разу не обнуляли: сам прибор считает
+           сбросы и не даёт спрятать их число. У покупателя кнопки уже нет. -->
+      <div id="svc-reset-wrap" style="display:none">
+        <div class="section-div">Заводская приёмка</div>
+        <div class="card">
+          <div class="set-row">
+            <div>
+              <div class="set-label">Обнулить счётчики</div>
+              <div class="set-sub">разово, перед передачей покупателю</div>
+            </div>
+            <button class="btn-outline btn-accent" style="flex:none;width:120px" onclick="factoryResetLog()">Обнулить</button>
+          </div>
+          <div class="set-sub" style="margin-top:8px">
+            Стирает наработку и пробег, накопленные при проверке на стенде,
+            чтобы покупатель получил изделие с нулями. Калибровку, поправку и
+            пресеты не трогает. Кнопка одноразовая: после обнуления исчезает
+            и больше не появится.
+          </div>
+        </div>
+      </div>
+
       <button class="btn btn-outline btn-accent" style="width:100%;margin-top:4px" onclick="sendBiteSettings()">Сохранить настройки</button>
     </div>
 
@@ -398,6 +435,38 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="card">
         <div class="input-group"><div class="input-label">Новое имя устройства</div><input class="text-input" id="rename-input" placeholder="ICE-TICK-1" maxlength="31"></div>
         <button class="btn-outline" style="width:100%;margin-top:4px" onclick="renameDevice()">Переименовать</button>
+      </div>
+
+      <div class="section-div">Написать производителю</div>
+      <div class="card">
+        <div class="set-sub" style="margin-bottom:10px">
+          Отзыв, неисправность, вопрос по гарантии, идея — пишите, ответим.
+          К сообщению приложится карточка прибора: по ней обычно сразу видно,
+          в чём дело, и не приходится выспрашивать подробности.
+        </div>
+        <div class="input-group">
+          <div class="input-label">Сообщение</div>
+          <textarea class="text-input" id="fb-text" rows="5" style="resize:vertical;font-family:inherit"
+                    placeholder="Что понравилось, что нет, что случилось…"
+                    oninput="fbSave()"></textarea>
+        </div>
+        <div class="input-group">
+          <div class="input-label">Как с вами связаться</div>
+          <input class="text-input" id="fb-contact" placeholder="телефон, почта или ник" oninput="fbSave()">
+        </div>
+        <button class="btn-outline btn-accent" style="width:100%" onclick="fbSendTg()">Отправить в Telegram</button>
+        <div class="btn-row" style="margin-top:8px;margin-bottom:0">
+          <button class="btn-outline" onclick="fbSendMail()">Почтой</button>
+          <button class="btn-outline" onclick="fbCopy()">Скопировать</button>
+        </div>
+        <div class="set-sub" style="margin-top:10px">
+          Сообщение уходит из вашего мессенджера или почты. На льду без связи
+          оно подождёт в очереди и отправится само, когда появится сеть.
+          Текст сохраняется в телефоне — можно закрыть приложение и дописать
+          дома.
+        </div>
+        <div class="set-sub" style="margin-top:12px">Вместе с сообщением уйдёт:</div>
+        <pre id="fb-card">—</pre>
       </div>
     </div>
 
@@ -508,6 +577,7 @@ window.onload = () => {
   renderPresets();
   updatePresetsOwnerLine();   // после перезагрузки страницы привязки нет
   applyBiteSettingsToUI();
+  fbLoad();                   // недописанное сообщение переживает закрытие
   buildSpeedGrid('sg-up',   v => { upSpeed = v;   setSpeedGrid('sg-up', v); });
   buildSpeedGrid('sg-down', v => { downSpeed = v; setSpeedGrid('sg-down', v); });
 };
@@ -575,6 +645,8 @@ async function bleConnectTo(filterName) {
     const configPromise = waitForStatus(d => d.ev === 'config', 2000);
     await sendCmd({ cmd: 'get_config' });
     await sendCmd({ cmd: 'get_trim' });     // Слой 6: текущая поправка и размах
+    await sendCmd({ cmd: 'get_log' });      // наработка и пробег для главной
+    logPollStart();                         // и дальше сами, раз в пять секунд
     await configPromise;   // не блокируем жёстко, просто пропускаем вперёд
 
     // Программу читаем при КАЖДОМ подключении. Источник правды — кивок:
@@ -612,6 +684,12 @@ function bleDisconnect() {
 function onDisconnected() {
   connected = false; bleDevice = null; charCmd = null;
   charOtaFw = null; charOtaCmd = null;
+  showHook(false);   // связи нет — плашка рыбы не должна висеть на экране
+  logPollStop();
+  const svc = document.getElementById('svc-block');
+  if (svc) svc.style.display = 'none';   // цифры без прибора — вчерашние
+  const svcr = document.getElementById('svc-reset-wrap');
+  if (svcr) svcr.style.display = 'none';
   if (otaBusy) otaAbortReq = true;   // связь пропала посреди обновления
   setBleUI('', 'Подключить');
   setStatus('', 'Нет подключения', '');
@@ -661,7 +739,12 @@ async function sendStart() {
   await sendCmd({ cmd: 'start' });
 }
 
-async function sendStop()    { await sendCmd({ cmd: 'stop' }); }
+async function sendStop() {
+  await sendCmd({ cmd: 'stop' });
+  // Прибор сохраняет журнал по «Стопу», так что сразу и перечитываем —
+  // человек видит свежие цифры, а не те, что были при подключении.
+  setTimeout(() => sendCmd({ cmd: 'get_log' }), 300);
+}
 async function sendProgram() {
   // Один пресет за одну BLE-запись: одна большая set_program легко превышает
   // жёсткий предел протокола ATT (512 байт) уже на 6 пресетах.
@@ -679,9 +762,27 @@ async function sendProgram() {
 function calSetSub(t) { document.getElementById('cal-sub').textContent = t; }
 
 function calBusy(on) {
+  calRunning = on;   // на время калибровки прибор отвечает отказом на всё
   const b = document.getElementById('cal-btn');
   b.disabled = on;
   b.textContent = on ? 'Идёт…' : 'Запустить';
+}
+
+// ── Живые счётчики ──
+// Прибор считает градусы и секунды непрерывно, в оперативке. Спрашивать их
+// раз в пять секунд ничего не стоит: это чтение, флеш не трогается. Сохранение
+// во флеш остаётся редким и по событиям — иначе NVS выработается за месяцы.
+let calRunning = false;
+let logPollTimer = null;
+function logPollStart() {
+  if (logPollTimer) return;
+  logPollTimer = setInterval(() => {
+    if (!connected || otaBusy || calRunning) return;
+    sendCmd({ cmd: 'get_log' });
+  }, 5000);
+}
+function logPollStop() {
+  if (logPollTimer) { clearInterval(logPollTimer); logPollTimer = null; }
 }
 
 function calErrText(code) {
@@ -695,6 +796,7 @@ function calErrText(code) {
 }
 
 function applyTrim(d) {
+  if (d.sp !== undefined && !d.err) { fbTrim = d; fbRender(); }
   if (d.sp !== undefined && d.wl !== undefined && !d.err) {
     calSetSub(d.sp ? ('поправка ' + d.tr + '°, размах ' + d.sp + '°, предел ±' + d.wl + '°')
                    : 'не калибровано (поправка ' + d.tr + '°)');
@@ -705,6 +807,17 @@ async function startCalibration() {
   if (!connected) { toast('Сначала подключись'); return; }
   calBusy(true); calSetSub('запуск…');
   await sendCmd({ cmd: 'calibrate' });
+}
+
+// Заводская приёмка. Команду принимает любой прибор, ограничение здесь одно —
+// экранное: кнопку показываем, пока сбросов ноль. Прятать её жёстче смысла нет,
+// прибор всё равно помнит, сколько раз его обнуляли.
+async function factoryResetLog() {
+  if (!connected) { toast('Сначала подключись'); return; }
+  if (!confirm('Обнулить наработку и пробег?\n\n'
+             + 'Кнопка одноразовая — после обнуления она исчезнет.')) return;
+  await sendCmd({ cmd: 'log_reset' });
+  setTimeout(() => sendCmd({ cmd: 'get_log' }), 300);
 }
 
 async function sendBiteSettings() {
@@ -783,6 +896,8 @@ function onStatus(e) {
       else      { calSetSub('ошибка: ' + calErrText(d.err)); toast('Калибровка не удалась'); }
       return;
     }
+    if (ev === 'log')        { applyServiceLog(d); return; }
+    if (ev === 'log_reset')  { toast('Счётчики обнулены'); return; }
     if (ev === 'trim')       { applyTrim(d); return; }
     if (ev === 'trim_saved') { toast('Поправка сохранена'); return; }
     // Итог паузы и снимки предыстории — служебные события отладочной сборки,
@@ -842,6 +957,9 @@ async function fetchProgramFromDevice() {
 
 function applyRemoteConfig(d) {
   if (d.nm) document.getElementById('rename-input').value = d.nm;
+  if (d.nm) fbDevName = d.nm;
+  if (d.sn) fbSerial  = d.sn;   // заводской номер, стереть его нельзя ничем
+  fbRender();
   biteSettings.holdMode        = d.hm ?? biteSettings.holdMode;
   biteSettings.biteThresholdMA = d.bt ?? biteSettings.biteThresholdMA;
   biteSettings.biteFilterMs    = d.bf ?? biteSettings.biteFilterMs;
@@ -1233,11 +1351,17 @@ function showBite() {
 
 // Слой 7. Плашка засечки, в отличие от поклёвки, сама не гаснет: она держится,
 // пока плата не скажет «рыба сошла» (hook/lost) или пока не отключимся.
+let hookShown = false;
 function showHook(on) {
   const b = document.getElementById('hook-banner');
   if (!b) return;
   b.style.display = on ? 'block' : 'none';
-  if (on && navigator.vibrate) navigator.vibrate([400,150,400,150,400,150,800]);
+  // Вибрация — РОВНО ОДИН раз, на входе в состояние. Эта функция зовётся из
+  // телеметрии каждые 300 мс всё время, пока плата держит рыбу, и без проверки
+  // перехода vibrate() перезапускался бесконечно: телефон тряс без остановки,
+  // пока горит красная плашка (найдено на железе 29.09).
+  if (on && !hookShown && navigator.vibrate) navigator.vibrate([400,150,400,150,400,150,800]);
+  hookShown = on;
 }
 
 // ── ОБНОВЛЕНИЕ ПРОШИВКИ ПО ВОЗДУХУ ──
@@ -1497,6 +1621,154 @@ async function otaRun(bin, fname) {
     otaBusy = false; otaAbortReq = false;
     otaUI(false);
   }
+}
+
+// ── СЕРВИСНЫЙ ЖУРНАЛ ──
+// Показываем ровно два числа: наработку и пробег. Взмахи прибор считает тоже,
+// но они нужны для гарантийной бумаги и сервиса, а не покупателю — на экране
+// от них только шум. Остальное (токи, перегрузы, напряжения) приходит в том же
+// ответе и ждёт отдельного сервисного приложения.
+// Пробег — НЕ градусы: единица равна полному размаху, прибор делит сам.
+function applyServiceLog(d) {
+  const sec = d.hs ?? 0;
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  document.getElementById('svc-hours').textContent =
+    h > 0 ? (h + ' ч ' + m + ' мин') : (m + ' мин');
+  document.getElementById('svc-mileage').textContent =
+    (d.mi ?? 0).toLocaleString('ru-RU');
+  document.getElementById('svc-block').style.display = 'block';
+  // Кнопка заводской приёмки живёт ровно до первого обнуления. Решает не
+  // приложение, а прибор: он считает сбросы и это число не обнуляется ничем.
+  document.getElementById('svc-reset-wrap').style.display =
+    ((d.rs ?? 0) === 0) ? 'block' : 'none';
+  // Полный журнал — в консоль: пока это единственный способ его посмотреть,
+  // отдельное сервисное приложение с графиками будет позже.
+  console.log('[ЖУРНАЛ]', JSON.stringify(d));
+  fbLog = d; fbRender();
+}
+
+// ── СВЯЗЬ С ПРОИЗВОДИТЕЛЕМ ──
+// У приложения нет и не будет своего сервера: это один файл, который живёт на
+// телефоне. Поэтому «отправить» здесь означает собрать готовое сообщение и
+// передать его мессенджеру или почте, которые у человека уже есть. На льду без
+// связи оно просто полежит в их очереди и уйдёт само.
+//
+// Контакты — ниже, менять одной строкой.
+const SUPPORT_TG    = 'https://t.me/ICE_TICK_bot';   // ЗАГЛУШКА — заменить на своего бота
+const SUPPORT_EMAIL = 'support@example.com';         // ЗАГЛУШКА — заменить на свой адрес
+
+let fbSerial  = '';    // заводской номер (efuse MAC), приходит в config
+let fbDevName = '';    // имя прибора на момент чтения карточки
+let fbLog     = null;  // последний ответ get_log
+let fbTrim    = null;  // последний ответ get_trim / cal_result
+
+function fbSave() {
+  try {
+    localStorage.setItem('fbText',    document.getElementById('fb-text').value);
+    localStorage.setItem('fbContact', document.getElementById('fb-contact').value);
+  } catch(_) {}
+}
+function fbLoad() {
+  try {
+    document.getElementById('fb-text').value    = localStorage.getItem('fbText')    || '';
+    document.getElementById('fb-contact').value = localStorage.getItem('fbContact') || '';
+  } catch(_) {}
+  fbRender();
+}
+
+// Карточка прибора. Всё, что здесь есть, приложение и так знает — ничего не
+// добирается и не додумывается. Главное в ней не пробег, а пара «опоры при
+// выпуске / опоры сейчас»: их расхождение — прямая мера износа редуктора.
+function fbBuildCard() {
+  const L = fbLog, T = fbTrim, out = [];
+  out.push('— карточка прибора —');
+  out.push('Прибор: ' + (fbDevName || 'не подключался'));
+  out.push('Заводской номер: ' + (fbSerial || 'не считан'));
+  out.push('Приложение: V.1.15');
+  if (L) {
+    const sec = L.hs ?? 0;
+    out.push('Наработка: ' + Math.floor(sec / 3600) + ' ч ' + Math.floor((sec % 3600) / 60) + ' мин');
+    out.push('Пробег: ' + (L.mi ?? 0) + ', взмахов: ' + (L.sw ?? 0));
+    out.push('Включений: ' + (L.pw ?? 0) + ', просадок питания: ' + (L.bro ?? 0)
+             + ', сбросов счётчиков: ' + (L.rs ?? 0));
+    out.push('Перегрузов: ' + (L.oc ?? 0) + ', пик тока: ' + (L.mc ?? 0) + ' мА');
+    out.push('Напряжение: мин ' + ((L.mnv ?? 0) / 1000).toFixed(2)
+             + ' В, макс ' + ((L.mxv ?? 0) / 1000).toFixed(2) + ' В');
+    out.push('Опоры при выпуске: ' + (L.r1 ?? 0) + ' / ' + (L.r2 ?? 0) + ' мА');
+    out.push('Опоры сейчас: ' + (L.t1 ?? 0) + ' / ' + (L.t2 ?? 0) + ' мА');
+  } else {
+    out.push('Данные прибора не считаны — подключитесь к удочке, и они появятся.');
+  }
+  if (T && T.sp !== undefined) {
+    out.push(T.sp ? ('Калибровка: поправка ' + T.tr + '°, размах ' + T.sp + '°, предел ±' + T.wl + '°')
+                  : 'Калибровка: не проводилась');
+  }
+  return out.join('\n');
+}
+
+function fbRender() {
+  const el = document.getElementById('fb-card');
+  if (el) el.textContent = fbBuildCard();
+}
+
+function fbBuildMessage() {
+  const txt = document.getElementById('fb-text').value.trim();
+  const who = document.getElementById('fb-contact').value.trim();
+  const out = ['ICE-TICK · сообщение', '', txt];
+  if (who) out.push('', 'Связь: ' + who);
+  out.push('', fbBuildCard());
+  return out.join('\n');
+}
+
+// Проверка перед отправкой одна: пустое сообщение отправлять некуда.
+function fbCheck() {
+  if (!document.getElementById('fb-text').value.trim()) {
+    toast('Напишите сообщение'); return false;
+  }
+  return true;
+}
+
+// Копирование. navigator.clipboard есть не везде (старый webview, страница,
+// открытая файлом), поэтому под ним лежит старый способ через скрытое поле.
+async function fbToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text); return true;
+    }
+  } catch(_) {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch(_) { return false; }
+}
+
+// Телеграм не умеет подставлять готовый текст в чат бота — можно передать
+// только короткий служебный параметр. Поэтому кладём сообщение в буфер и
+// открываем бота: человеку остаётся вставить и нажать отправку.
+async function fbSendTg() {
+  if (!fbCheck()) return;
+  const ok = await fbToClipboard(fbBuildMessage());
+  toast(ok ? 'Текст скопирован — вставьте его в чат' : 'Скопируйте текст кнопкой «Скопировать»');
+  window.open(SUPPORT_TG, '_blank');
+}
+
+function fbSendMail() {
+  if (!fbCheck()) return;
+  const subj = 'ICE-TICK' + (fbSerial ? ' · ' + fbSerial : '');
+  window.location.href = 'mailto:' + SUPPORT_EMAIL
+    + '?subject=' + encodeURIComponent(subj)
+    + '&body='    + encodeURIComponent(fbBuildMessage());
+}
+
+async function fbCopy() {
+  if (!fbCheck()) return;
+  const ok = await fbToClipboard(fbBuildMessage());
+  toast(ok ? 'Сообщение скопировано' : 'Не удалось скопировать');
 }
 
 let toastTimer;
