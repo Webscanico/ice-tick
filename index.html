@@ -30,10 +30,17 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; overflow: hidden; }
-#app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; }
+/* 100vh первой строкой — запасной путь: старые webview и часть браузеров не
+   знают единицу dvh, и тогда высота #app остаётся неопределённой. */
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 480px; margin: 0 auto; }
 #header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 #tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-#content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* min-height: 0 — не косметика, а то, из-за чего страница не доматывалась до
+   конца. У flex-ребёнка минимальный размер по умолчанию равен размеру его
+   содержимого: #content отказывался ужиматься, вылезал за низ #app, а body с
+   overflow:hidden срезал хвост, и добраться до него было нечем. */
+#content { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+           overscroll-behavior: contain; }
 #content::-webkit-scrollbar { display: none; }
 
 /* HEADER */
@@ -62,7 +69,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .tab.active { color: var(--accent); border-color: var(--accent); }
 
 /* PAGES */
-.page { display: none; padding: 16px; }
+/* Нижний отступ больше верхнего: на телефонах последнюю строку съедает полоса
+   жестов, а на вытянутых экранах просто неудобно читать у самого края. */
+.page { display: none; padding: 16px; padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)); }
 .page.active { display: block; }
 
 /* CARDS */
@@ -207,6 +216,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
 .mode-btn { padding: 7px 14px; font-size: 12px; font-weight: 500; border: none; cursor: pointer; transition: all .2s; background: var(--bg3); color: var(--text2); }
 .mode-btn.active-eco    { background: var(--green); color: #031a0e; }
 .mode-btn.active-active { background: var(--accent); color: #031a0e; }
+.mode-btn.active-off    { background: var(--text2); color: #031a0e; }
 
 /* MODAL */
 #modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: flex-end; }
@@ -351,11 +361,11 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
       <div class="card">
         <div class="set-row">
           <div><div class="set-label">Звук</div><div class="set-sub">Сигналы поклёвки и предупреждения</div></div>
-          <label class="toggle-wrap">
-            <input type="checkbox" id="tog-sound" onchange="onSoundToggle()">
-            <div class="toggle-track"></div>
-            <div class="toggle-thumb"></div>
-          </label>
+          <div class="mode-switch">
+            <button class="mode-btn" id="snd-0" onclick="setSoundLevel(0)">Выкл</button>
+            <button class="mode-btn" id="snd-1" onclick="setSoundLevel(1)">Тихо</button>
+            <button class="mode-btn" id="snd-2" onclick="setSoundLevel(2)">Громко</button>
+          </div>
         </div>
       </div>
 
@@ -568,7 +578,7 @@ let biteSettings = {
   biteThresholdMA: 10, biteFilterMs: 100,
   autoStrike: false
 };
-let soundOn = true;   // звук зуммера (поле "sd" в get_config/set_sound)
+let soundLevel = 1;   // звук зуммера: 0 выкл / 1 тихо / 2 громко (поле "sv" в get_config, "vol" в set_sound)
 let editingIndex = -1, upSpeed = 2, downSpeed = 2;
 
 // ── INIT ──
@@ -958,13 +968,14 @@ async function fetchProgramFromDevice() {
 function applyRemoteConfig(d) {
   if (d.nm) document.getElementById('rename-input').value = d.nm;
   if (d.nm) fbDevName = d.nm;
-  if (d.sn) fbSerial  = d.sn;   // заводской номер, стереть его нельзя ничем
+  if (d.uid) fbSerial = d.uid;  // заводской номер, стереть его нельзя ничем
   fbRender();
   biteSettings.holdMode        = d.hm ?? biteSettings.holdMode;
   biteSettings.biteThresholdMA = d.bt ?? biteSettings.biteThresholdMA;
   biteSettings.biteFilterMs    = d.bf ?? biteSettings.biteFilterMs;
   biteSettings.autoStrike      = d.as ?? biteSettings.autoStrike;
-  if (d.sd !== undefined) soundOn = d.sd;
+  if (d.sv !== undefined)      soundLevel = d.sv;            // новая прошивка
+  else if (d.sd !== undefined) soundLevel = d.sd ? 1 : 0;    // старая: только вкл/выкл
   applyBiteSettingsToUI();
 }
 
@@ -1270,14 +1281,22 @@ function applyBiteSettingsToUI() {
   setSlider('sl-bite',   'sv-bite',   nearestIdx(SENS_MA, biteSettings.biteThresholdMA), '');
   setSlider('sl-filter', 'sv-filter', nearestIdx(TIME_MS, biteSettings.biteFilterMs),     '');
   document.getElementById('tog-strike').checked = biteSettings.autoStrike;
-  document.getElementById('tog-sound').checked = soundOn;
+  renderSoundLevel();
 }
 // Звук — отдельная команда set_sound, применяется СРАЗУ по переключению
 // (не через "Сохранить настройки"), как и в прошивке: мгновенно вкл/выкл.
-async function onSoundToggle() {
-  soundOn = document.getElementById('tog-sound').checked;
-  await sendCmd({ cmd: 'set_sound', on: soundOn });
-  toast(soundOn ? 'Звук включён' : 'Звук выключен');
+function renderSoundLevel() {
+  [0,1,2].forEach(l => {
+    const b = document.getElementById('snd-' + l);
+    if (b) b.className = 'mode-btn' + (soundLevel === l ? (l === 0 ? ' active-off' : ' active-active') : '');
+  });
+}
+async function setSoundLevel(l) {
+  soundLevel = l;
+  renderSoundLevel();
+  // "on" оставлен для прошивки 1.15i и старше: она знает только вкл/выкл.
+  await sendCmd({ cmd: 'set_sound', on: l > 0, vol: l });
+  toast(['Звук выключен','Звук: тихо','Звук: громко'][l]);
 }
 function setSlider(sid, vid, val, sfx) {
   document.getElementById(sid).value = val;
