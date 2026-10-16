@@ -363,8 +363,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px;
           <div><div class="set-label">Звук</div><div class="set-sub">Сигналы поклёвки и предупреждения</div></div>
           <div class="mode-switch">
             <button class="mode-btn" id="snd-0" onclick="setSoundLevel(0)">Выкл</button>
-            <button class="mode-btn" id="snd-1" onclick="setSoundLevel(1)">Тихо</button>
-            <button class="mode-btn" id="snd-2" onclick="setSoundLevel(2)">Громко</button>
+            <button class="mode-btn" id="snd-1" onclick="setSoundLevel(1)">Тон 1</button>
+            <button class="mode-btn" id="snd-2" onclick="setSoundLevel(2)">Тон 2</button>
           </div>
         </div>
       </div>
@@ -578,7 +578,7 @@ let biteSettings = {
   biteThresholdMA: 10, biteFilterMs: 100,
   autoStrike: false
 };
-let soundLevel = 1;   // звук зуммера: 0 выкл / 1 тихо / 2 громко (поле "sv" в get_config, "vol" в set_sound)
+let soundLevel = 1;   // звук зуммера: 0 выкл / 1 тон 1 / 2 тон 2 (поле "sv" в get_config, "vol" в set_sound)
 let editingIndex = -1, upSpeed = 2, downSpeed = 2;
 
 // ── INIT ──
@@ -1296,7 +1296,7 @@ async function setSoundLevel(l) {
   renderSoundLevel();
   // "on" оставлен для прошивки 1.15i и старше: она знает только вкл/выкл.
   await sendCmd({ cmd: 'set_sound', on: l > 0, vol: l });
-  toast(['Звук выключен','Звук: тихо','Звук: громко'][l]);
+  toast(['Звук выключен','Звук: тон 1','Звук: тон 2'][l]);
 }
 function setSlider(sid, vid, val, sfx) {
   document.getElementById(sid).value = val;
