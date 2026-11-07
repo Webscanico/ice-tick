@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a1628">
+<title>ICE-TICK · Конструктор игры</title>
+<link rel="icon" type="image/png" href="img/favicon-64.png">
+<!--
+  ICE-TICK — конструктор игры, этап 1 (v0.19 — рыбы машут хвостом влево-вправо)
+  v0.19: хвост рыб бьёт в сторону (виден как сужение/раскрытие плавника), а не вверх-вниз.
+  v0.18: рыбы рождаются и исчезают только за видимым краем сцены (края считаются
+         по факту ширины окна), при открытии заплывают по очереди.
+  v0.17: крючок твистера жалом к головке; на фоне лещ клюёт дно, судаки и
+         форели проплывают на случайной глубине, в случайную сторону, разного размера.
+  v0.16: твистер — ребристое тело, хвост-лента; в покое свёрнут серпом,
+         от малейшего движения распрямляется и идёт волной («незаконченная восьмёрка»).
+  v0.15: формы «Джиг» больше нет (по решению 16.10); твистер остаётся.
+         Сохранённый в браузере «джиг» открывается как твистер.
+  v0.13: балансир — крючки жалом вверх, хвост меньше.
+  v0.14: у джига и твистера ушко сверху груза; в покое хвост около горизонта
+         (95°, не ниже 100°), на падении головка первой, хвост вверх; на
+         резком взмахе хвост захлёстывает вниз до 170° и возвращается.
+  v0.8: ICE-TICK по фото, пружинный кивок, инерция приманки.
+  v0.10: масштаб 23 см от оси до кончика кивка; приманка тонет со своей
+         скоростью (вес, форма, вода у льда), подтяжка SINK_K убрана; кивок
+         короче и жёстче, один на все веса; ползунок веса 0,5–15 г.
+  v0.11: пять форм — джиг, твистер, мормышка, колебалка, балансир; у каждой
+         своя скорость погружения, рисунок и поведение на падении. Колебалка
+         на падении случайно уходит в сторону, на подъёме идёт ровно; балансир
+         горизонтален и уходит дугой. Форма и вес в .lure не попадают.
+  v0.12: колебалка падает как лист — крючком вперёд, качаясь влево-вправо и
+         сносясь в случайную сторону, крючок не выше кольца; балансир сносит
+         дугой в случайную сторону; уход вбок задан долей от скорости падения;
+         мормышка с наживкой тонет медленнее; дно на 4,6 см ниже нижней точки
+         приманки; леска светлая и тонкая.
+  v0.9: константы сверены с V.1.15i (все совпали); зона шкалы за рабочим
+        пределом ±60° притушена; уточнены подписи про поклёвку и порядок импорта.
+  Отдельная страница для сайта. Bluetooth не использует: собирает файл .lure,
+  который открывает приложение ICE-TICK V.1.15 (Пресеты → Импорт .lure).
+
+  Модель движения повторяет прошивку V.1.15i один в один:
+   - пара = один пресет: подъём → пауза вверху → спуск → пауза внизу, × серия;
+   - ход равномерный, время = |Δугол| × {22,14,9,5,2} мс/° по скорости 1..5;
+   - после серии — следующая пара, после последней снова первая;
+   - между парами углы свободны (nextCycle → beginMoveUp едет куда угодно);
+   - внутри пары низ минимум на 1° ниже верха (clampDownAngle).
+  В файл кладутся ТОЛЬКО пары и название. Блока biteSettings нет намеренно:
+  приложение при импорте перезаписало бы им настройки клиента.
+-->
+<style>
+:root{
+  --bg:#0a1628;--bg2:#111f38;--bg3:#162544;
+  --accent:#00c8ff;--accent2:#0084aa;
+  --green:#00e08a;--red:#ff4557;--amber:#ffaa00;
+  --text:#e8f4ff;--text2:#7a9bbf;--border:rgba(0,200,255,.14);
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font:15px/1.4 'Helvetica Neue',Arial,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:14px 12px 48px}
+
+header{max-width:780px;margin:0 auto 12px}
+.logo{font-size:13px;font-weight:700;letter-spacing:.15em;color:var(--accent);text-transform:uppercase}
+.logo span{color:var(--text2);font-weight:400;letter-spacing:.05em;text-transform:none}
+.sub{font-size:13px;color:var(--text2);margin-top:4px}
+details.help{margin-top:8px;font-size:13px;color:var(--text2)}
+details.help summary{cursor:pointer;color:var(--accent)}
+details.help ol{margin:8px 0 0 18px}
+details.help li{margin-bottom:4px}
+
+.views{display:grid;grid-template-columns:1fr;gap:8px;max-width:780px;margin:0 auto 8px}
+.view{position:relative;background:#eef4f8;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.view-head{background:var(--bg2);display:flex;justify-content:space-between;align-items:baseline;padding:7px 10px;font-size:12px;color:var(--text2)}
+.view-head b{color:var(--accent);font-size:15px;font-variant-numeric:tabular-nums}
+.view svg{display:block;width:100%;height:auto;flex:none;touch-action:none;user-select:none;-webkit-user-select:none}
+#rod{cursor:pointer}
+.forms{flex:none;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--bg2);padding:8px 10px 0}
+.forms button{height:32px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.forms button.on{background:var(--accent2);border-color:var(--accent);color:#fff;font-weight:600}
+.lure-ctl{flex:none;display:flex;align-items:center;gap:10px;background:var(--bg2);padding:8px 10px;font-size:12px;color:var(--text2)}
+.lure-ctl input{flex:1;min-width:0;accent-color:var(--accent)}
+.lure-ctl b{color:var(--accent);font-size:15px;font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+.lure-ctl span{font-variant-numeric:tabular-nums;min-width:96px}
+/* На телефоне окна закреплены сверху: панель шага прокручивается под ними,
+   и кивок остаётся на виду, пока жмёшь «Запомнить». */
+@media (max-width:819px){
+  .views{position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0 4px;margin-bottom:4px}
+  .view svg{max-height:52vh}
+  .forms{gap:3px;padding:6px 6px 0;grid-template-columns:repeat(4,auto)}
+  .forms button{font-size:11px;height:30px;padding:0 3px;letter-spacing:-.2px}
+}
+
+.status{max-width:780px;margin:0 auto 12px;background:var(--bg3);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--text2);min-height:38px}
+.status b{color:var(--text);font-weight:600}
+
+.lower{display:grid;gap:12px;grid-template-columns:1fr;max-width:780px;margin:0 auto}
+@media (min-width:820px) and (max-width:1023px){.lower{grid-template-columns:1fr 1fr}}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px}
+h2{font-size:15px;font-weight:600}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.lnk{background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:4px 2px}
+
+.steps{display:flex;gap:6px;margin-bottom:4px}
+.steps span{flex:1;text-align:center;font-size:12px;padding:6px;border-radius:8px;background:var(--bg3);color:var(--text2)}
+.steps .cur.up{background:rgba(0,224,138,.15);color:var(--green);font-weight:600}
+.steps .cur.dn{background:rgba(255,170,0,.15);color:var(--amber);font-weight:600}
+.steps .done{color:var(--text)}
+
+.lbl{display:block;font-size:12px;color:var(--text2);margin:12px 0 6px}
+.lbl b{color:var(--text);font-weight:500}
+.angle-row{display:flex;align-items:center;gap:10px}
+.angle-val{flex:1;text-align:center;font-size:30px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.stepbtn{width:64px;height:44px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:15px;cursor:pointer}
+.speed{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.speed button{height:42px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:15px;cursor:pointer}
+.speed button.on{background:var(--accent2);border-color:var(--accent);color:#fff;font-weight:600}
+.text{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:15px;outline:none}
+.text:focus{border-color:var(--accent)}
+.text.short{max-width:150px}
+.edge{font-size:12px;color:var(--amber);text-align:center;margin-top:4px;min-height:1em}
+.bite{font-size:12px;margin-top:6px}
+.bite.ok{color:var(--green)}
+.bite.no{color:var(--text2)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.seg button{height:42px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:14px;cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button.on.up{background:rgba(0,224,138,.14);border-color:var(--green);color:var(--green);font-weight:600}
+.seg button.on.dn{background:rgba(255,170,0,.14);border-color:var(--amber);color:var(--amber);font-weight:600}
+.warn{color:var(--amber);font-size:13px;margin-top:10px}
+
+.btns,.play-row,.file-row{display:flex;gap:8px;margin-top:14px}
+.btn{flex:1;min-height:44px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--green);border-color:var(--green);color:#031a0e}
+.btn.accent{border-color:var(--accent);color:var(--accent)}
+.btn.danger{flex:0 0 auto;color:var(--red);border-color:rgba(255,69,87,.35)}
+.btn:disabled{opacity:.4;cursor:default}
+
+.stats{font-size:12px;color:var(--text2);margin-top:8px}
+#list{margin-top:12px}
+.empty{font-size:13px;color:var(--text2);text-align:center;padding:18px 0}
+.pair{display:flex;gap:8px;background:var(--bg3);border:1px solid transparent;border-radius:10px;padding:10px;margin-bottom:8px}
+.pair.sel{border-color:var(--accent)}
+.pair.playing{box-shadow:inset 3px 0 0 var(--green)}
+.pair-main{flex:1;min-width:0;cursor:pointer}
+.pair-top{display:flex;gap:8px;align-items:baseline;margin-bottom:4px}
+.pnum{font-size:12px;color:var(--text2);font-variant-numeric:tabular-nums}
+.pname{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cyc{font-size:12px;color:var(--text2)}
+.pair-row{font-size:12.5px;color:var(--text2);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pair-row .a{font-weight:600}
+.pair-row.up .a{color:var(--green)}
+.pair-row.dn .a{color:var(--amber)}
+.pair-act{display:grid;grid-template-columns:repeat(3,30px);gap:4px;align-self:center}
+.pair-act button{height:30px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:13px}
+.pair-act button:disabled{opacity:.3;cursor:default}
+.pair-act .del{color:var(--red)}
+.foot{font-size:11.5px;color:var(--text2);margin-top:10px}
+
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border);padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+
+/* ── ПК (от 1024 px): страница ровно в экран, без общей прокрутки ──
+   Левая половина — кивок и вода, всегда видны.
+   Правая — настройки; прокручивается только она (или только список пар). */
+/* ── ПК (от 1024 px): страница ровно в экран, без общей прокрутки.
+   Рабочая область — 90% ширины окна по центру. От 1400 px — три равные
+   колонки по трети: сцена | настройки | пресеты. У настроек и у списка пар
+   своя прокрутка, сцена не двигается никогда. */
+@media (min-width:1024px){
+  html,body{height:100%;overflow:hidden}
+  .wrap{width:90vw;max-width:none;height:100vh;margin:0 auto;padding:0 0 12px;display:grid;column-gap:12px;
+        grid-template-columns:minmax(0,1fr) minmax(0,2fr);grid-template-rows:auto minmax(0,1fr)}
+  header{grid-column:1/-1;max-width:none;margin:0;padding:10px 0;display:flex;align-items:baseline;gap:16px;border-bottom:1px solid var(--border)}
+  header .sub{margin:0}
+  .views{grid-column:1;grid-row:2;display:flex;flex-direction:column;max-width:none;margin:0;padding:12px 0 0;min-height:0}
+  .view{min-height:0}
+  .view.scene{flex:1 1 0}
+  .view svg{flex:1 1 0;min-height:0;height:100%;max-height:none}
+  .side{grid-column:2;grid-row:2;min-height:0;display:flex;flex-direction:column;padding:12px 0 0}
+  .status{max-width:none;margin:0 0 10px}
+  .lower{flex:1 1 auto;min-height:0;max-width:none;margin:0;overflow-y:auto;grid-template-columns:1fr;align-content:start}
+}
+@media (min-width:1400px){
+  .wrap{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .side,.lower{display:contents}
+  .col-panel{grid-column:2;grid-row:2;margin-top:12px;overflow-y:auto;min-height:0;padding-right:2px}
+  .card.game{grid-column:3;grid-row:2;margin-top:12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .card.game #list{flex:1 1 0;min-height:60px;overflow-y:auto;padding-right:4px}
+  .card.game .file-row,.card.game .foot{flex:none}
+}
+.col-panel .help{margin:10px 4px 0}
+
+/* Кнопка возврата на сайт (добавлено для сайта) */
+.site-back{display:inline-flex;align-items:center;gap:6px;margin:0 12px 8px 0;padding:8px 14px;border-radius:999px;
+  border:1px solid var(--border);background:var(--bg3);color:var(--accent);font-size:13px;font-weight:600;text-decoration:none;
+  transition:border-color .2s,background .2s}
+.site-back:hover{border-color:var(--accent);background:var(--bg2)}
+.site-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* FAQ конструктора (добавлено для сайта) */
+.site-faq{color:var(--text)}
+.cfaq{display:none;position:fixed;inset:0;z-index:50;overflow-y:auto;background:rgba(5,12,24,.86);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:max(24px,env(safe-area-inset-top)) 16px 40px}
+.cfaq:target{display:block}
+.cfaq__box{position:relative;max-width:880px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:28px 28px 26px}
+.cfaq__close{position:absolute;right:14px;top:10px;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--text2);font-size:28px;text-decoration:none}
+.cfaq__close:hover{color:var(--accent);background:var(--bg2)}
+.cfaq__foot{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+@media (max-width:600px){.cfaq__box{padding:22px 16px 20px}.cfaq__h{font-size:23px;padding-right:36px}}
+.cfaq__h{font-size:28px;font-weight:800;color:var(--text);margin:0 0 8px}
+.cfaq__lead{color:var(--text2);margin:0 0 22px;font-size:15px}
+.cfaq__list{display:grid;gap:10px}
+.cfaq__item{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:0 18px;transition:border-color .2s}
+.cfaq__item[open]{border-color:rgba(0,200,255,.4)}
+.cfaq__item summary{cursor:pointer;list-style:none;padding:16px 28px 16px 0;position:relative;font-weight:700;font-size:16px;color:var(--text)}
+.cfaq__item summary::-webkit-details-marker{display:none}
+.cfaq__item summary::after{content:"+";position:absolute;right:0;top:12px;font-size:22px;color:var(--accent);font-weight:400}
+.cfaq__item[open] summary::after{content:"×"}
+.cfaq__a{color:var(--text2);font-size:15px;line-height:1.55;padding:0 0 16px}
+.cfaq__a ol{margin:6px 0 8px;padding-left:20px}
+.cfaq__a li{margin:4px 0}
+.cfaq__a b{color:var(--text)}
+
+/* Демо-режим для главной страницы сайта (constructor.html?demo): только сцена, игра по кругу */
+body.demo,body.demo html{background:transparent!important;overflow:hidden!important;margin:0}
+body.demo .wrap{display:block!important;width:100vw!important;height:100vh!important;max-width:none!important;margin:0!important;padding:0!important}
+body.demo header,body.demo aside.side,body.demo .view-head,body.demo .cfaq,body.demo .toast,body.demo #toast{display:none!important}
+body.demo .views{position:static!important;display:flex!important;flex-direction:column;height:100vh;max-width:none!important;margin:0!important;padding:0!important;background:none!important}
+body.demo .view.scene{flex:1 1 0;min-height:0;border-radius:10px}
+body.demo .view svg{flex:1 1 0;min-height:0;height:100%;max-height:none!important;cursor:default}
+body.demo .forms{grid-template-columns:repeat(4,1fr)!important;gap:6px!important;padding:12px 12px 0!important}
+body.demo .forms button{height:46px!important;font-size:17px!important;border-radius:9px!important}
+body.demo .lure-ctl{padding:12px!important;font-size:17px!important}
+body.demo .lure-ctl b{font-size:22px!important}
+body.demo *{pointer-events:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <a class="site-back" href="index.html">← На главную ICE-TICK</a>
+    <a class="site-back site-faq" href="#faq">? Как пользоваться</a>
+    <div class="logo">ICE-TICK <span>· конструктор игры</span></div>
+    <p class="sub">Соберите игру кивка по шагам, посмотрите, как она работает, и сохраните файл для пульта ICE-TICK на компьютере или телефоне.</p>
+  </header>
+
+  <!-- Левая половина: то, на что смотрят. На ПК всегда на экране. -->
+  <main class="views">
+    <div class="view scene">
+      <div class="view-head"><span>ICE-TICK и приманка</span><b id="angleBig">0°</b></div>
+      <svg id="rod" viewBox="0 0 400 1194" overflow="visible" aria-label="Кивок, лунка и приманка у дна"></svg>
+      <div class="forms" id="forms" role="group" aria-label="Приманка"></div>
+      <div class="lure-ctl">
+        <label for="wt">Вес приманки</label>
+        <input type="range" id="wt" min="0.5" max="15" step="0.5" value="4">
+        <b id="wtVal"></b>
+        <span id="wtSink"></span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Правая половина: всё, чем управляют. Прокручивается сама по себе. -->
+  <aside class="side">
+
+    <div class="lower">
+      <div class="col-panel">
+        <div id="status" class="status"></div>
+        <section class="card" id="panel"></section>
+        <details class="help">
+          <summary>Как собрать игру</summary>
+          <ol>
+            <li>Кликните по шкале у кончика — кивок встанет на этот угол. Выберите скорость и паузу, нажмите «Запомнить верх».</li>
+            <li>Так же выберите низ, задайте серию (сколько раз повторить пару) и нажмите «Запомнить низ». Пара готова.</li>
+            <li>Кликните по паре в списке, чтобы изменить её, и сразу смотрите результат кнопкой «▶ Эта пара».</li>
+            <li>«Сохранить .lure» → в пульте ICE-TICK <b>сначала подключитесь к устройству</b>, затем откройте «Пресеты» → «Импорт .lure» и нажмите «Старт». Если импортировать до подключения, при подключении прибор заменит список своей программой.</li>
+          </ol>
+        </details>
+      </div>
+
+      <section class="card game">
+        <h2>Игра</h2>
+        <label class="lbl" for="gameName">Название игры</label>
+        <input id="gameName" class="text" maxlength="60" placeholder="Например: Окунь_утро">
+        <div class="stats" id="stats"></div>
+        <div class="play-row">
+          <button class="btn primary" id="btnPlay">▶ Вся игра</button>
+          <button class="btn" id="btnStop" disabled>■ Стоп</button>
+        </div>
+        <div id="list"></div>
+        <div class="file-row">
+          <button class="btn" id="btnOpen">Открыть .lure</button>
+          <button class="btn accent" id="btnSave">Сохранить .lure</button>
+          <button class="btn danger" id="btnNew" title="Начать новую игру">Новая</button>
+        </div>
+        <p class="foot">🎣 — в этой паузе ICE-TICK слушает поклёвку. Верно для заводских настроек: режим ACTIVE и время поклёвки 100 мс, тогда нужна пауза от 0,82 с. В режиме ECO поклёвку прибор не слушает.</p>
+      </section>
+    </div>
+  </aside>
+
+  <input type="file" id="file" accept=".lure,.json" hidden>
+  <div id="toast"></div>
+</div>
+
+<script>
+'use strict';
+
+// ── Константы прошивки V.1.15i ────────────────────────────────
+const SPEED_MS  = [0, 22, 14, 9, 5, 2];          // speedMsPerDeg()
+const SPEED_LBL = ['', 'очень медленно', 'медленно', 'средне', 'быстро', 'очень быстро'];
+const A_MAX     = 65;                             // ANGLE_RANGE_MAX — шкала ввода
+// WORK_LIMIT_DEFAULT: докуда гарантированно едет любой прибор (до калибровки).
+// После калибровки — до ±64 (WORK_LIMIT_MAX). Углы дальше прибор тихо срежет,
+// пресет при этом не портится — поэтому шкалу не урезаем, а только притушаем.
+const A_SAFE    = 60;
+const MAX_P     = 16;                             // MAX_PRESETS
+// Минимальная пауза, при которой плата взводит детект поклёвки при заводском
+// «времени поклёвки» 100 мс: BASE_WINDOW_MS 600 + BITE_SMOOTH_N*40 120 + 100.
+const BITE_MIN  = 820;
+// Имя пресета в прошивке — char[24]: 23 БАЙТА UTF-8. Кириллица занимает по
+// 2 байта, и strlcpy на плате разрезал бы букву пополам — режем здесь.
+const NAME_BYTES = 23;
+const PAUSE_MAX = { up: 5000, down: 10000 };      // как поля приложения
+const PHASE     = ['Подъём', 'Пауза ↑', 'Спуск', 'Пауза ↓'];
+
+// ── Геометрия сцены (пропорции по фото ICE-TICK) ──────────────
+// Удочка — жёсткий рычаг; вся «живость» в пружинном кивке на конце хлыста.
+const PV     = { x: 96, y: 250 };   // ось площадки
+const LR     = 160;                  // от оси до зажима кивка
+const ROD_H  = 20;                   // удочка лежит на площадке, выше оси
+const LK     = 40;                   // длина кивка (v0.10: короче, ≈4.6 см)
+const DROOP  = 18 * Math.PI / 180;   // кивок изогнут вниз и без груза
+const R      = LR + LK + 20;         // радиус шкалы
+
+// ── Физика в реальных единицах (v0.10) ────────────────────────
+// Масштаб: от оси площадки до кончика кивка 23 см (замер ICE-TICK, удочка 35 см).
+// Внутри физика считает в px и секундах, все силы пересчитаны из СИ через S.
+const S       = (LR + LK) / 0.23;    // px на метр (~870)
+const RHO_W   = 1000;                // вода у льда, кг/м³
+const NU_W    = 1.67e-6;             // кинематическая вязкость при ~2 °C, м²/с
+const GRAV    = 9.81;
+// Кивок один на все веса: короткий и жёсткий. 15 г гнут его сильно (≈2.5 см),
+// 0.5 г — едва заметно (≈1 мм).
+const K_KIV   = 5.4;                 // жёсткость кивка, Н/м
+const MK      = 0.0003;              // масса кончика кивка, кг
+const KK      = K_KIV / MK;          // то же на единицу массы кончика, 1/с²
+const CK      = 80;                  // затухание кивка, 1/с
+const SUB     = 10;                  // подшагов физики на кадр
+
+// ── Пять форм приманки (v0.11). Расчёт тот же, что в документе «Физика приманки».
+//  sphere — головка-шар (сопротивление по Re) + силиконовое тело, если есть;
+//  plate  — пластина (колебалка, балансир): размер растёт с весом как ∛m.
+//  mode   — как ведёт себя в воде:
+//    jig   — ушко сверху головки, на слабой леске планирует в сторону (твистер);
+//    hang  — висит отвесно, почти не планирует (мормышка);
+//    spoon — падает как лист: крючком вперёд, качаясь влево-вправо, в целом
+//            сносится в случайную сторону; крючок никогда не выше кольца; на подъёме ровно;
+//    bal   — горизонтально; на падении уходит дугой в случайную сторону, леска возвращает.
+//  glide  — v0.12: во сколько раз боковая скорость меньше скорости падения
+//           (0.7 = на 10 см вниз 7 см вбок). Для колебалки — множитель к tg угла блесны.
+//  bait   — сопротивление наживки, м² (мормышка с мотылём тонет медленнее).
+//  botR   — сколько приманки ниже точки крепления лески, px (касание дна).
+const RHO_SIL = 1100;
+const BODY_V  = Math.PI * 0.0025 * 0.0025 * 0.04 * 0.7;   // объём силиконового тела, м³
+const BODY_CDA = 0.000048;                                 // сопротивление тела, м²
+const FORMS = {
+  twister:   { name: 'Твистер',   kind: 'sphere', rho: 11340, cdk: 1.0, body: true,  tail: 0.87, mode: 'jig',   glide: 0.30, botR: 5 },
+  mormyshka: { name: 'Мормышка',  kind: 'sphere', rho: 19300, cdk: 1.3, body: false, tail: 1.00, mode: 'hang',  glide: 0.05, botR: 4, bait: 1.2e-4 },
+  spoon:     { name: 'Колебалка', kind: 'plate',  rho: 8000,  L0: 0.037, m0: 0.004, wr: 0.17, cf: 0.35, mode: 'spoon', glide: 0.90, botR: 4 },
+  balancer:  { name: 'Балансир',  kind: 'plate',  rho: 10000, L0: 0.045, m0: 0.006, wr: 0.22, cf: 0.55, mode: 'bal',   glide: 0.70, botR: 8 }
+};
+const FORM_KEYS = Object.keys(FORMS);
+// Цвет твистера (v0.16) — меняется здесь одной строкой
+const TW_COL = { body: '#4fd864', ring: '#2a9a3c', belly: '#b6f5bd', edge: '#1f7a30', tail: 'rgba(78,216,100,.88)' };
+const W_MIN = 0.5, W_MAX = 15, W_DEF = 4;                 // ползунок веса, г
+function cdSphere(re) { return 24 / re * (1 + 0.15 * Math.pow(re, 0.687)) + 0.42 / (1 + 42500 / Math.pow(re, 1.16)); }
+function lureModel(form, grams) {
+  if (!FORMS[form]) form = 'twister';
+  const F = FORMS[form], m = grams / 1000, V = m / F.rho;
+  let W, mEff, v;
+  if (F.kind === 'sphere') {
+    const d = Math.cbrt(6 * V / Math.PI), A = Math.PI * d * d / 4, bv = F.body ? BODY_V : 0;
+    W = (m * (1 - RHO_W / F.rho) + bv * (RHO_SIL - RHO_W)) * GRAV;            // вес в воде, Н
+    mEff = m + bv * RHO_SIL + 0.5 * RHO_W * (V + bv);                         // + присоединённая вода
+    v = 0.5;
+    for (let i = 0; i < 200; i++) {
+      const cda = F.cdk * cdSphere(Math.max(v * d / NU_W, 1)) * A + (F.body ? BODY_CDA : 0) + (F.bait || 0);
+      v = 0.5 * v + 0.5 * Math.sqrt(2 * W / (RHO_W * cda));
+    }
+    v *= F.tail;
+  } else {
+    const len = F.L0 * Math.cbrt(m / F.m0), wid = F.wr * len;
+    W = m * (1 - RHO_W / F.rho) * GRAV;
+    mEff = m + 0.5 * RHO_W * V + 0.25 * RHO_W * wid * wid * len;              // пластина тащит за собой больше воды
+    v = Math.sqrt(2 * W / (RHO_W * F.cf * len * wid));
+  }
+  const sc = Math.min(1.55, Math.max(0.6, Math.cbrt(grams / W_DEF)));          // масштаб рисунка
+  return { form, F, grams, W, mEff, acc: W / mEff * S, vt: v * S, vtCm: v * 100, sc, botR: F.botR * sc };
+}
+let L = lureModel('twister', W_DEF);  // текущая приманка (меняют кнопки формы и ползунок)
+
+// Зажим кивка и кончик кивка в покое при угле площадки a (градусы).
+function clipPoint(aDeg) {
+  const a = aDeg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return { x: PV.x + LR * c - ROD_H * s, y: PV.y - LR * s - ROD_H * c };
+}
+function kivokRest(aDeg) {
+  const k = clipPoint(aDeg), b = aDeg * Math.PI / 180 - DROOP;
+  return { x: k.x + LK * Math.cos(b), y: k.y - LK * Math.sin(b) };
+}
+
+// Кончик кивка в покое под весом приманки: кивок не растягивается, а гнётся
+// (кончик ходит по дуге вокруг зажима), поэтому равновесие ищем итерациями.
+function staticTip(aDeg, W = L.W) {
+  const k = clipPoint(aDeg), r = kivokRest(aDeg);
+  const f = W * S / MK, al = 0.3 / KK;   // нагрузка на кончик, px/с²; шаг релаксации
+  let x = r.x, y = r.y;
+  for (let i = 0; i < 400; i++) {
+    x += al * KK * (r.x - x); y += al * (KK * (r.y - y) + f);
+    const dx = x - k.x, dy = y - k.y, d = Math.hypot(dx, dy) || 1;
+    x = k.x + dx / d * LK; y = k.y + dy / d * LK;
+  }
+  return { x, y };
+}
+// Лёд: кончик кивка с самой тяжёлой приманкой на −65° висит над ним ≈ в 1 см.
+const W_REF    = Math.max(...FORM_KEYS.map(f => lureModel(f, W_MAX).W));   // самая тяжёлая из форм
+const TIP_LOW  = staticTip(-65, W_REF).y;
+const ICE_TOP  = Math.round(TIP_LOW + 6);
+const ICE_BOT  = ICE_TOP + 34;
+// Лунка широкая: кончик на всём ходе стоит над ней, леска не трётся о лёд.
+const HOLE_L   = Math.round(Math.min(staticTip(65, W_REF).x, staticTip(-65, W_REF).x) - 30);
+const HOLE_R   = Math.round(clipPoint(0).x + LK + 22);   // кивок, вытянутый в струну на 0°
+const HX       = Math.round((HOLE_L + HOLE_R) / 2);
+// Дно: воды в полтора раза больше, чем места над льдом, плюс запас BOT_CLEAR (v0.12):
+// даже в самой нижней точке (−65°) приманка до дна не достаёт.
+const BOT_CLEAR = 40;                // ≈4.6 см между приманкой на −65° и дном
+const BOT_Y    = ICE_BOT + Math.round(ICE_TOP * 1.4) + BOT_CLEAR;
+const SCENE_H  = BOT_Y + 44;
+const HEAD_R   = 5;                  // джиг-головка
+// Длина лески: на −65° приманка висит на BOT_CLEAR выше дна. Кивок под разным
+// весом гнётся по-разному, поэтому леску «перевязываем» при смене веса —
+// как рыбак, выставляя глубину.
+const lineFor  = (W, botR) => (BOT_Y - BOT_CLEAR - botR) - staticTip(-65, W).y;
+let   LLINE    = lineFor(L.W, L.botR);
+const STORE = 'iceTickConstructor_v1';
+
+// ── Утилиты ───────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const rad = d => d * Math.PI / 180;
+function pt(r, a) { return { x: PV.x + r * Math.cos(rad(a)), y: PV.y - r * Math.sin(rad(a)) }; }
+function arcD(r, a1, a2) {
+  const s = pt(r, a1), e = pt(r, a2);
+  return `M${s.x.toFixed(1)},${s.y.toFixed(1)} A${r},${r} 0 0 0 ${e.x.toFixed(1)},${e.y.toFixed(1)}`;
+}
+const fmtA = a => (a > 0 ? '+' : a < 0 ? '−' : '') + Math.abs(a) + '°';
+const fmtS = ms => (ms / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) + ' с';
+function fmtDur(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + ' с';
+  const m = Math.floor(s / 60);
+  return m + ' мин' + (s % 60 ? ' ' + (s % 60) + ' с' : '');
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const enc = new TextEncoder();
+function utf8Trim(s, max) {
+  const a = Array.from(s);
+  while (a.length && enc.encode(a.join('')).length > max) a.pop();
+  return a.join('');
+}
+function num(v, d) { v = parseInt(v, 10); return Number.isFinite(v) ? v : d; }
+
+// Приводим пару к тем же пределам, что и прошивка. Понимает и формат
+// приложения (upAngle…), и короткий формат протокола (ua…).
+function normPreset(p, i) {
+  p = p || {};
+  const up = clamp(num(p.upAngle ?? p.ua, 45), -A_MAX + 1, A_MAX);
+  const dn = clamp(num(p.downAngle ?? p.da, 0), -A_MAX, up - 1);
+  const fallback = 'Пара ' + (i + 1);
+  return {
+    name:      utf8Trim(String(p.name ?? p.nm ?? fallback), NAME_BYTES) || fallback,
+    upAngle:   up,
+    upSpeed:   clamp(num(p.upSpeed ?? p.us, 2), 1, 5),
+    upPause:   clamp(num(p.upPause ?? p.up, 200), 0, PAUSE_MAX.up),
+    downAngle: dn,
+    downSpeed: clamp(num(p.downSpeed ?? p.ds, 2), 1, 5),
+    downPause: clamp(num(p.downPause ?? p.dp, 3000), 0, PAUSE_MAX.down),
+    cycles:    clamp(num(p.cycles ?? p.cy, 10), 1, 999)
+  };
+}
+
+// ── Состояние ─────────────────────────────────────────────────
+function loadStore() {
+  try {
+    const d = JSON.parse(localStorage.getItem(STORE));
+    if (d && Array.isArray(d.presets))
+      return { name: d.name || '', presets: d.presets.slice(0, MAX_P).map(normPreset) };
+  } catch (e) {}
+  return { name: '', presets: [] };
+}
+function persist() { try { localStorage.setItem(STORE, JSON.stringify(game)); } catch (e) {} }
+
+let game = loadStore();
+let presets = game.presets;
+let mode = 'record';        // 'record' — запись новой пары, 'edit' — правка выбранной
+let draft = null;           // записанный «верх» незаконченной пары
+let insertAt = null;        // куда вставить новую пару (null — в конец)
+let sel = -1;               // выбранная пара в режиме правки
+let part = 'up';            // какую точку пары правим
+const rec = { angle: 30, speed: 3, pauseUp: 1000, pauseDown: 3000, cycles: 5 };
+const rod = { a: 0, target: 30, mpd: SPEED_MS[3], prev: 0 };
+let play = null;
+
+const AUTO = /^Пара \d+$/;
+function renumber() { presets.forEach((p, i) => { if (AUTO.test(p.name)) p.name = 'Пара ' + (i + 1); }); }
+
+function range() {
+  if (mode === 'edit') {
+    const p = presets[sel];
+    return part === 'up' ? [p.downAngle + 1, A_MAX] : [-A_MAX, p.upAngle - 1];
+  }
+  return draft ? [-A_MAX, draft.upAngle - 1] : [-A_MAX + 1, A_MAX];
+}
+const workPart  = () => mode === 'edit' ? part : (draft ? 'down' : 'up');
+const workAngle = () => mode === 'edit' ? presets[sel][part + 'Angle'] : rec.angle;
+const workSpeed = () => mode === 'edit' ? presets[sel][part + 'Speed'] : rec.speed;
+const workPause = () => mode === 'edit' ? presets[sel][part + 'Pause'] : (draft ? rec.pauseDown : rec.pauseUp);
+
+// Кивок едет к рабочему углу с выбранной скоростью — так видно, как
+// быстро будет ходить именно этот шаг.
+function aim() {
+  if (play) return;
+  rod.target = workAngle();
+  rod.mpd = SPEED_MS[workSpeed()];
+}
+
+function setAngle(a) {
+  const [lo, hi] = range();
+  a = clamp(Math.round(a), lo, hi);
+  if (mode === 'edit') { presets[sel][part + 'Angle'] = a; persist(); renderList(); }
+  else rec.angle = a;
+  aim(); updatePanelLive(); drawArcState();
+}
+
+function setSpeed(v) {
+  if (mode === 'edit') { presets[sel][part + 'Speed'] = v; persist(); renderList(); }
+  else rec.speed = v;
+  document.querySelectorAll('.speed button').forEach(b => b.classList.toggle('on', +b.dataset.spd === v));
+  const l = $('pSpdLbl'); if (l) l.textContent = SPEED_LBL[v];
+  aim();
+}
+
+function setPause(raw, final) {
+  let n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) { if (!final) return; n = 0; }
+  const wp = workPart();
+  n = clamp(n, 0, PAUSE_MAX[wp]);
+  if (mode === 'edit') { presets[sel][wp + 'Pause'] = n; persist(); renderList(); }
+  else if (draft) rec.pauseDown = n; else rec.pauseUp = n;
+  if (final) $('pPause').value = n;
+  updatePanelLive();
+}
+
+function setCycles(raw, final) {
+  let n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) { if (!final) return; n = 1; }
+  n = clamp(n, 1, 999);
+  if (mode === 'edit') { presets[sel].cycles = n; persist(); renderList(); }
+  else rec.cycles = n;
+  if (final) $('pCycles').value = n;
+}
+
+function remember() {
+  if (!draft) {
+    if (presets.length >= MAX_P) { toast('Максимум ' + MAX_P + ' пар'); return; }
+    draft = { upAngle: rec.angle, upSpeed: rec.speed, upPause: rec.pauseUp };
+    rec.angle = clamp(rec.angle - 30, -A_MAX, draft.upAngle - 1);
+  } else {
+    const idx = insertAt === null ? presets.length : insertAt;
+    presets.splice(idx, 0, {
+      name: 'Пара ' + (idx + 1), ...draft,
+      downAngle: rec.angle, downSpeed: rec.speed, downPause: rec.pauseDown, cycles: rec.cycles
+    });
+    if (insertAt !== null) insertAt = (idx + 1 < presets.length) ? idx + 1 : null;
+    draft = null;
+    rec.angle = clamp(rec.angle + 30, -A_MAX + 1, A_MAX);   // следующий верх — в допустимой зоне
+    renumber(); persist(); renderList();
+    toast('Пара №' + (idx + 1) + ' записана');
+  }
+  renderPanel(); aim(); drawArcState(); updateStatus();
+}
+
+
+// ── Фоновые рыбы (v0.17) — только для красоты, на физику приманки не влияют ──
+// Рисунки в своих координатах: голова по +x, хвост по −x, длина ≈ 50–60 px при масштабе 1.
+// Хвостовой плавник — отдельная группа, качается вокруг стебля хвоста.
+const FISH_ART = {
+  zander: {   // судак: вытянутый, серо-зелёный, тёмные поперечные полосы, два спинных, большой стеклянный глаз
+    tailX: -29,
+    draw(g, t) {
+      el('path', { d: 'M-29,0 L-42,-9 L-39,0 L-42,9 Z', fill: '#75806c' }, t);
+      el('path', { d: 'M12,-7.4 L10,-14 L5,-12.5 L0,-14 L-6,-7.4 Z', fill: '#78826d' }, g);
+      [[8, -12], [2, -12.4], [-3, -11]].forEach(([x, y]) => el('circle', { cx: x, cy: y, r: 0.9, fill: '#3b4236' }, g));
+      el('path', { d: 'M-9,-7 L-11,-12 L-20,-9 L-22,-4.6 Z', fill: '#78826d' }, g);
+      el('path', { d: 'M-10,6.4 L-14,11 L-20,9 L-21,4.2 Z', fill: '#8a9480' }, g);
+      el('path', { d: 'M30,0 C26,-6 12,-8.5 -6,-7.5 C-18,-6.5 -26,-3 -30,-1 L-30,1 C-26,3 -18,6 -6,6.5 C12,7 26,5 30,0 Z', fill: '#9aa58f' }, g);
+      el('path', { d: 'M28,2 C14,6 -10,6 -28,1.5', fill: 'none', stroke: '#dfe4d6', 'stroke-width': 2, opacity: 0.7 }, g);
+      [16, 8, 0, -8, -16].forEach(x => el('path', { d: `M${x},-7.6 q-2,4 -1,8`, fill: 'none', stroke: 'rgba(45,55,40,.45)', 'stroke-width': 2.6 }, g));
+      el('path', { d: 'M12,6 l-4,5 l-3,-4 Z', fill: '#8a9480' }, g);
+      el('circle', { cx: 22, cy: -2.2, r: 2.5, fill: '#ece5c4' }, g);
+      el('circle', { cx: 22.4, cy: -2.2, r: 1.2, fill: '#222' }, g);
+      el('path', { d: 'M30,0.6 L24,1.6', stroke: '#4a5244', 'stroke-width': 0.6 }, g);
+    }
+  },
+  trout: {    // форель: торпеда, оливковая спина, серебристые бока, розовая полоса, чёрные точки, жировой плавник
+    tailX: -25,
+    draw(g, t) {
+      el('path', { d: 'M-25,0 L-37,-8 L-34.5,0 L-37,8 Z', fill: '#6d7a60' }, t);
+      el('path', { d: 'M6,-7.4 L2,-13 L-6,-11.6 L-8,-7 Z', fill: '#76845f' }, g);
+      el('path', { d: 'M-12,6 L-15,10.5 L-20,8.6 L-19,5 Z', fill: '#9aa58f' }, g);
+      el('path', { d: 'M28,0 C25,-6 10,-8 -6,-7 C-18,-6 -24,-3.5 -26,-1.2 L-26,1.2 C-24,3.5 -18,6 -6,6.6 C10,7.2 25,5 28,0 Z', fill: '#c3ccbe' }, g);
+      el('path', { d: 'M28,-1 C22,-6 8,-8 -6,-7 C-16,-6.2 -22,-4 -26,-1.4 C-14,-3.5 4,-4.5 28,-1 Z', fill: '#5f6f4c' }, g);
+      el('path', { d: 'M24,0.6 C10,-0.4 -10,-0.4 -25,0', fill: 'none', stroke: 'rgba(222,110,135,.75)', 'stroke-width': 2.4 }, g);
+      for (let i = 0; i < 16; i++) el('circle', { cx: (20 - i * 2.8 + (i % 2) * 1.2).toFixed(1), cy: (-4.2 + (i % 3) * 1.4).toFixed(1), r: 0.55, fill: '#2b2b2b' }, g);
+      el('path', { d: 'M-16,-5.8 q-1.6,-3 -4,-0.4', fill: '#76845f' }, g);
+      el('circle', { cx: 21, cy: -1.8, r: 1.6, fill: '#e9e4cf' }, g);
+      el('circle', { cx: 21.3, cy: -1.8, r: 0.8, fill: '#222' }, g);
+    }
+  },
+  bream: {    // лещ: высокое сжатое тело, бронзовый, маленькая голова, длинный анальный плавник
+    tailX: -21,
+    draw(g, t) {
+      el('path', { d: 'M-21,0 L-33,-11 L-29,0 L-33,11 Z', fill: '#6f6243' }, t);
+      el('path', { d: 'M2,-14.8 L-2,-22 L-8,-14 Z', fill: '#6f6243' }, g);
+      el('path', { d: 'M0,14.2 L-4,19 L-18,12.6 L-17,8 Z', fill: '#8a7a52' }, g);
+      el('path', { d: 'M25,0 C24,-7 14,-14 2,-15 C-10,-15 -19,-9 -22,-1.5 L-22,1.5 C-19,9 -10,14 2,14.5 C14,14 24,7 25,0 Z', fill: '#b09c6a' }, g);
+      el('path', { d: 'M24,-3 C20,-10 12,-14 2,-15 C-10,-15 -18,-10 -21,-3 C-8,-8 10,-8 24,-3 Z', fill: '#76684a' }, g);
+      el('path', { d: 'M10,7 l-5,6 l-2,-5 Z', fill: '#8a7a52' }, g);
+      el('circle', { cx: 19, cy: -2.6, r: 1.6, fill: '#ece2c6' }, g);
+      el('circle', { cx: 19.3, cy: -2.6, r: 0.8, fill: '#222' }, g);
+      el('path', { d: 'M25,0.4 l2.4,1.8', stroke: '#5a4f36', 'stroke-width': 0.8, 'stroke-linecap': 'round' }, g);   // выдвижной рот
+    }
+  }
+};
+const fishes = [];
+function makeFish(kind) {
+  const outer = el('g', {}, fishG), body = el('g', {}, outer), tail = el('g', {}, body);
+  FISH_ART[kind].draw(body, tail);
+  const f = { kind, outer, body, tail, t: Math.random() * 10 };
+  respawnFish(f, true);
+  fishes.push(f);
+}
+// Видимые края сцены в координатах рисунка. Сцена рисуется шире 0…400, когда окно
+// шире её пропорций, поэтому края считаем по факту (v0.18).
+function viewX() {
+  try {
+    const r = svgR.getBoundingClientRect(), m = svgR.getScreenCTM().inverse(), pt = svgR.createSVGPoint();
+    pt.x = r.left; pt.y = r.top; const a = pt.matrixTransform(m).x;
+    pt.x = r.right; const b = pt.matrixTransform(m).x;
+    if (isFinite(a) && isFinite(b) && b > a) return [a, b];
+  } catch (e) {}
+  return [0, 400];
+}
+// Новая жизнь рыбы: случайная сторона, глубина, размер, скорость. Рождается всегда
+// ЗА краем экрана и заплывает в кадр. first — при открытии страницы: отступ за край
+// случайный, чтобы рыбы заплывали не все разом.
+function respawnFish(f, first) {
+  f.dir = Math.random() < 0.5 ? 1 : -1;
+  if (f.kind === 'bream') {
+    f.sc = 0.75 + 0.35 * Math.random();
+    f.x = 40 + Math.random() * 320; f.y = BOT_Y - 19 * f.sc;
+    f.mode = 'peck'; f.left = 2 + 2 * Math.random(); f.tilt = 0;
+  } else {
+    f.sc = f.kind === 'zander' ? 0.5 + 0.7 * Math.random() : 0.45 + 0.5 * Math.random();
+    f.y = ICE_BOT + 50 + Math.random() * (BOT_Y - ICE_BOT - 110);
+    const [vl, vr] = viewX(), out = 45 * f.sc + 10 + (first ? Math.random() * 350 : Math.random() * 60);
+    f.x = f.dir > 0 ? vl - out : vr + out;
+    f.v = (f.kind === 'zander' ? 25 : 35) + Math.random() * 45;      // px/с
+    f.vy = (Math.random() - 0.5) * 6; f.tilt = 0;
+  }
+  // мелкие (дальние) — бледнее, крупные (ближние) — ярче
+  f.outer.setAttribute('opacity', (0.35 + 0.4 * Math.min(1, f.sc)).toFixed(2));
+}
+function updateFish(dt) {
+  dt = clamp(dt, 0, 0.05);
+  const [vl, vr] = viewX();
+  for (const f of fishes) {
+    f.t += dt;
+    let wag;
+    if (f.kind === 'bream') {
+      // Лещ: клюёт носом в грунт — постоит, покачается, поднимет муть; потом переползёт
+      f.left -= dt;
+      if (f.mode === 'peck') {
+        const want = 0.75 + 0.12 * Math.sin(f.t * 5);                 // ~43° носом вниз, с поклёвками
+        f.tilt += (want - f.tilt) * Math.min(1, dt * 3);
+        if (Math.random() < dt * 0.9) puff(f.x + f.dir * 22 * f.sc, BOT_Y - 2, 60);
+        wag = 0.15 * Math.sin(f.t * 3);
+        if (f.left <= 0) { f.mode = 'move'; f.left = 1.5 + 2 * Math.random(); if (Math.random() < 0.4) f.dir = -f.dir; }
+      } else {
+        f.tilt += (0.05 - f.tilt) * Math.min(1, dt * 2);
+        f.x += f.dir * 14 * dt;
+        if (f.x < 30) f.dir = 1; if (f.x > 370) f.dir = -1;
+        wag = 0.3 * Math.sin(f.t * 5);
+        if (f.left <= 0) { f.mode = 'peck'; f.left = 2 + 3 * Math.random(); }
+      }
+    } else {
+      // Судак, форель: плывут поперёк кадра, чуть гуляя по глубине
+      f.x += f.dir * f.v * dt;
+      f.vy += (Math.random() - 0.5) * 8 * dt; f.vy = clamp(f.vy, -6, 6);
+      f.y = clamp(f.y + f.vy * dt, ICE_BOT + 40, BOT_Y - 45);
+      f.tilt += (clamp(f.vy / 30, -0.2, 0.2) * f.dir - f.tilt) * Math.min(1, dt * 2);
+      wag = 0.32 * Math.sin(f.t * (4 + f.v / 15));
+      // уплыла за край, к которому плыла, — новая жизнь (рождение за краем)
+      if ((f.dir > 0 && f.x > vr + 50 * f.sc + 10) || (f.dir < 0 && f.x < vl - 50 * f.sc - 10)) respawnFish(f, false);
+    }
+    const a = f.tilt * 180 / Math.PI;
+    f.outer.setAttribute('transform', `translate(${f.x.toFixed(1)},${f.y.toFixed(1)}) scale(${(f.dir * f.sc).toFixed(3)},${f.sc.toFixed(3)}) rotate(${a.toFixed(1)})`);
+    // Хвост бьёт влево-вправо, то есть к зрителю и от него (v0.19). Сбоку это видно
+    // как сжатие плавника: в среднем положении он раскрыт во всю ширину, в крайних —
+    // повёрнут к нам ребром и сужается. За один взмах — два сужения, отсюда |wag|.
+    const tx = FISH_ART[f.kind].tailX, sx = clamp(1 - 2.2 * Math.abs(wag), 0.25, 1);
+    f.tail.setAttribute('transform', `translate(${tx},0) scale(${sx.toFixed(3)},1) translate(${-tx},0)`);
+    f.body.setAttribute('transform', `translate(0,${(Math.sin(f.t * 2.1) * 0.8).toFixed(2)})`);
+  }
+}
+function buildFish() { ['bream', 'zander', 'zander', 'trout', 'trout'].forEach(makeFish); }
+
+// ── Сцена: рисунок ────────────────────────────────────────────
+const svgR = $('rod');
+let arcOk, mTarget, mUp, mDn, rodG, rStrutL, rStrutR, rKivok, rBall, rLine, lureG, muddyG, motesG, fishG;
+let lureParts = {}, lureForms = {}, lureS = null;
+
+function buildRod() {
+  const W0 = -2000, WW = 4400;                     // шире кадра: окно любой ширины без пустых полос
+  const defs = el('defs', {}, svgR);
+  const lin = (id, stops, x2 = 0, y2 = 1) => {
+    const g = el('linearGradient', { id, x1: 0, y1: 0, x2, y2 }, defs);
+    stops.forEach(([o, c, op = 1]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': op }, g));
+  };
+  lin('gSky',   [[0, '#e9f0f5'], [1, '#fbfdfe']]);
+  lin('gWater', [[0, '#6fbdb4'], [0.35, '#a6dcd5'], [1, '#e6f6f4']]);
+  lin('gIce',   [[0, '#8fd1c6'], [0.45, '#5fb3a7'], [1, '#3d8f85']]);
+  lin('gRay',   [[0, '#ffffff', 0.55], [1, '#ffffff', 0]]);
+  lin('gBot',   [[0, '#d8ccb0'], [1, '#bfb192']]);
+
+  // Небо и снег
+  el('rect', { x: W0, y: -400, width: WW, height: ICE_TOP + 400, fill: 'url(#gSky)' }, svgR);
+  // Вода
+  el('rect', { x: W0, y: ICE_BOT - 2, width: WW, height: BOT_Y - ICE_BOT + 400, fill: 'url(#gWater)' }, svgR);
+  // Свет из лунки
+  el('path', { d: `M${HOLE_L + 10},${ICE_BOT} L${HOLE_R - 10},${ICE_BOT} L${HOLE_R + 70},${BOT_Y - 80} L${HOLE_L - 70},${BOT_Y - 80} Z`, fill: 'url(#gRay)', opacity: 0.55 }, svgR);
+  // Взвесь в воде (двигается в кадре)
+  motesG = el('g', { fill: '#ffffff', opacity: 0.55 }, svgR);
+  for (let i = 0; i < 34; i++) {
+    const c = el('circle', { r: (0.6 + Math.random() * 1.2).toFixed(2) }, motesG);
+    c._x = -40 + Math.random() * 480; c._y = ICE_BOT + 20 + Math.random() * (BOT_Y - ICE_BOT - 40);
+    c._p = Math.random() * 6.28; c._s = 3 + Math.random() * 6;
+  }
+  // Дно
+  const gy = BOT_Y;
+  el('path', { d: `M${W0},${gy + 3} L-20,${gy + 2} C40,${gy - 7} 100,${gy + 6} ${HX - 40},${gy} S300,${gy - 9} 430,${gy + 2} L${W0 + WW},${gy + 3} L${W0 + WW},${SCENE_H + 400} L${W0},${SCENE_H + 400} Z`, fill: 'url(#gBot)' }, svgR);
+  [[-60, 14, 4], [20, 12, 3], [70, 18, 5], [150, 15, 3.5], [HX + 30, 13, 4.5], [330, 17, 3], [390, 12, 4], [460, 16, 3.5]]
+    .forEach(([x, dy, r]) => el('ellipse', { cx: x, cy: gy + dy, rx: r * 1.4, ry: r, fill: '#a99b7c' }, svgR));
+  [[40, -1], [120, 1], [365, -1]].forEach(([x, dir]) =>
+    el('path', { d: `M${x},${gy + 2} q${dir * 4},-14 ${dir * 2},-26 M${x + 4},${gy + 2} q${-dir * 3},-10 ${dir * 5},-18`, fill: 'none', stroke: '#6f9f7c', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: 0.8 }, svgR));
+  fishG = el('g', {}, svgR);           // фоновые рыбы (v0.17) — за приманкой
+  muddyG = el('g', { fill: '#b4a585' }, svgR);
+
+  // Лёд: плита в разрезе с неровным низом, лунка — просвет с водой
+  const jag = (x0, x1) => {
+    let d = `M${x0},${ICE_TOP} L${x1},${ICE_TOP} L${x1},${ICE_BOT - 3}`;
+    for (let x = x1; x > x0; x -= 14) d += ` L${x - 7},${(ICE_BOT + Math.sin(x * 1.7) * 3 + 2).toFixed(1)} L${x - 14},${ICE_BOT - 2}`;
+    return d + ' Z';
+  };
+  el('path', { d: jag(W0, HOLE_L), fill: 'url(#gIce)' }, svgR);
+  el('path', { d: jag(HOLE_R, W0 + WW), fill: 'url(#gIce)' }, svgR);
+  el('rect', { x: HOLE_L, y: ICE_TOP, width: HOLE_R - HOLE_L, height: ICE_BOT - ICE_TOP, fill: '#8fcfc6', opacity: 0.55 }, svgR);
+  // Блики и трещинки во льду
+  const hl = el('g', { stroke: '#ffffff', 'stroke-width': 1.2, opacity: 0.35, fill: 'none' }, svgR);
+  [[-40, 6, 60], [30, 12, 40], [HOLE_R + 20, 8, 70], [HOLE_R + 110, 16, 45], [-160, 18, 80]].forEach(([x, y, w]) =>
+    el('path', { d: `M${x},${ICE_TOP + y} l${w},${-3}`, }, hl));
+  // Снег на льду и снежный бортик у лунки
+  el('path', { d: `M${W0},${ICE_TOP} L${HOLE_L - 14},${ICE_TOP} q10,-7 14,0 Z M${HOLE_R},${ICE_TOP} q6,-8 16,-3 L${W0 + WW},${ICE_TOP} Z`, fill: '#ffffff' }, svgR);
+  el('rect', { x: W0, y: ICE_TOP - 1, width: HOLE_L - W0, height: 4, fill: '#ffffff' }, svgR);
+  el('rect', { x: HOLE_R, y: ICE_TOP - 1, width: WW, height: 4, fill: '#ffffff' }, svgR);
+  el('ellipse', { cx: HX, cy: ICE_TOP + 1, rx: (HOLE_R - HOLE_L) / 2, ry: 3, fill: '#4d9e95', opacity: 0.6 }, svgR);
+
+  // Шкала углов (тонкая, чтобы не спорила с картинкой)
+  el('path', { d: arcD(R, -A_MAX, A_MAX), fill: 'none', stroke: 'rgba(40,70,100,.14)', 'stroke-width': 9, 'stroke-linecap': 'round' }, svgR);
+  arcOk = el('path', { fill: 'none', stroke: 'rgba(0,140,200,.42)', 'stroke-width': 9, 'stroke-linecap': 'round' }, svgR);
+  // Зона за рабочим пределом ±60°: выбрать можно, но прибор может её срезать
+  [[A_SAFE, A_MAX], [-A_MAX, -A_SAFE]].forEach(([a1, a2]) =>
+    el('path', { d: arcD(R, a1, a2), fill: 'none', stroke: 'rgba(238,244,248,.75)', 'stroke-width': 9,
+                 'stroke-dasharray': '2 3' }, svgR));
+  for (let a = -A_MAX; a <= A_MAX; a += 5) {
+    const major = a % 15 === 0;
+    const p1 = pt(R + 6, a), p2 = pt(R + (major ? 15 : 11), a);
+    el('line', { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, stroke: major ? '#4d6780' : 'rgba(77,103,128,.5)', 'stroke-width': major ? 1.5 : 1 }, svgR);
+    if (major) {
+      const t = pt(R + 27, a);
+      el('text', { x: t.x, y: t.y + 4, 'text-anchor': 'middle', 'font-size': 11, fill: '#4d6780' }, svgR)
+        .textContent = a > 0 ? '+' + a : a < 0 ? '−' + (-a) : '0';
+    }
+  }
+
+  // ICE-TICK: основание с отверстиями, стойка со светодиодом
+  const bx = PV.x, by = ICE_TOP - 4;
+  el('ellipse', { cx: bx, cy: by + 2, rx: 50, ry: 8, fill: '#000', opacity: 0.12 }, svgR);
+  el('path', { d: `M${bx - 46},${by - 3} L${bx - 46},${by + 1} A46,7 0 0 0 ${bx + 46},${by + 1} L${bx + 46},${by - 3} Z`, fill: '#30353b' }, svgR);
+  el('ellipse', { cx: bx, cy: by - 3, rx: 46, ry: 7, fill: '#454c54' }, svgR);
+  [[-30, -2], [-12, 1], [12, 1], [30, -2], [-22, -6], [22, -6]].forEach(([dx, dy]) =>
+    el('ellipse', { cx: bx + dx, cy: by - 3 + dy, rx: 5.5, ry: 1.8, fill: '#2a2e33' }, svgR));
+  el('rect', { x: bx - 11, y: PV.y + 8, width: 22, height: by - 6 - (PV.y + 8), rx: 3, fill: '#3e454d' }, svgR);
+  el('rect', { x: bx - 6, y: PV.y + 26, width: 13, height: by - 22 - (PV.y + 26), rx: 2, fill: '#555e68' }, svgR);
+  el('circle', { cx: bx + 0.5, cy: PV.y + 40, r: 3, fill: '#e23a32' }, svgR);
+  el('circle', { cx: bx + 0.5, cy: PV.y + 40, r: 1.2, fill: '#ff9a8a' }, svgR);
+  el('circle', { cx: bx + 0.5, cy: PV.y + 54, r: 1.3, fill: '#23272c' }, svgR);
+  el('path', { d: `M${bx - 9},${PV.y + 12} L${bx - 9},${PV.y - 4} Q${bx},${PV.y - 14} ${bx + 9},${PV.y - 4} L${bx + 9},${PV.y + 12} Z`, fill: '#a8b1bb' }, svgR);
+  // Тяги площадки (концы двигаются вместе с ней)
+  rStrutL = el('line', { stroke: '#8a949f', 'stroke-width': 3.2, 'stroke-linecap': 'round' }, svgR);
+  rStrutR = el('line', { stroke: '#8a949f', 'stroke-width': 3.2, 'stroke-linecap': 'round' }, svgR);
+
+  // Леска (за удочкой)
+  rLine = el('path', { fill: 'none', stroke: 'rgba(150,162,170,.5)', 'stroke-width': 0.6 }, svgR);   // v0.12: светлая и тонкая, почти не видна
+
+  // Площадка с удочкой — поворачивается как одно целое вокруг оси
+  rodG = el('g', {}, svgR);
+  const o = { x: PV.x, y: PV.y };
+  el('rect', { x: o.x - 46, y: o.y - 6, width: 88, height: 5, rx: 1.5, fill: '#1d2126' }, rodG);                 // площадка
+  el('rect', { x: o.x - 34, y: o.y - 14, width: 64, height: 8, rx: 2, fill: '#9aa4ae' }, rodG);                  // ложемент
+  el('rect', { x: o.x - 92, y: o.y - ROD_H - 6, width: 58, height: 12, rx: 6, fill: '#1c1e21' }, rodG);         // рукоять
+  el('rect', { x: o.x - 22, y: o.y - ROD_H - 4, width: 44, height: 8, rx: 3, fill: '#b9c1c9' }, rodG);           // катушкодержатель
+  el('ellipse', { cx: o.x - 2, cy: o.y - ROD_H - 5, rx: 17, ry: 6, fill: '#f2c230' }, rodG);                    // шпуля
+  el('ellipse', { cx: o.x - 2, cy: o.y - ROD_H - 9, rx: 13, ry: 4, fill: '#2f7a4e' }, rodG);                     // крышка
+  el('rect', { x: o.x - 3.5, y: o.y - ROD_H - 20, width: 3, height: 10, fill: '#2f7a4e' }, rodG);                // ручка катушки
+  el('rect', { x: o.x + 20, y: o.y - ROD_H - 6, width: 4, height: 12, rx: 1, fill: '#e3c02c' }, rodG);           // упор
+  el('line', { x1: o.x + 22, y1: o.y - ROD_H, x2: o.x + LR, y2: o.y - ROD_H, stroke: '#a8dc3c', 'stroke-width': 4, 'stroke-linecap': 'round', opacity: 0.9 }, rodG);  // хлыст
+  el('rect', { x: o.x + LR - 7, y: o.y - ROD_H - 5, width: 9, height: 9, rx: 1.5, fill: '#16181b' }, rodG);    // зажим кивка
+
+  // Кивок и шарик — рисуются в мировых координатах, это пружина
+  rKivok = el('path', { fill: 'none', stroke: '#98a2ad', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, svgR);
+  rBall  = el('circle', { r: 4.2, fill: '#e0312b', stroke: '#9c1a16', 'stroke-width': 0.8 }, svgR);
+  el('circle', { cx: PV.x, cy: PV.y, r: 5, fill: '#2b3137', stroke: '#9aa4ae', 'stroke-width': 1.4 }, svgR);  // ось
+
+  buildLure();
+
+  // Метки на шкале
+  mUp = el('circle', { r: 5.5, fill: '#00b870' }, svgR);
+  mDn = el('circle', { r: 5.5, fill: '#f59b00' }, svgR);
+  mTarget = el('circle', { r: 7.5, fill: '#0a9bd6', stroke: '#fff', 'stroke-width': 2 }, svgR);
+}
+
+function placeMarker(m, a) {
+  if (a === null) { m.setAttribute('visibility', 'hidden'); return; }
+  const p = pt(R, a);
+  m.setAttribute('cx', p.x); m.setAttribute('cy', p.y); m.setAttribute('visibility', 'visible');
+}
+
+function drawArcState() {
+  const [lo, hi] = range();
+  arcOk.setAttribute('d', lo < hi ? arcD(R, lo, hi) : '');
+  const w = workAngle();
+  placeMarker(mTarget, w);
+  let up = null, dn = null;
+  if (mode === 'edit') { up = presets[sel].upAngle; dn = presets[sel].downAngle; }
+  else if (draft) up = draft.upAngle;
+  placeMarker(mUp, up);
+  placeMarker(mDn, dn);
+  $('angleBig').textContent = fmtA(w);
+}
+
+// Кончик кивка — там, где висит леска
+function tipPos() { return { x: kiv.x, y: kiv.y }; }
+
+function drawRod() {
+  const aDeg = rod.a, a = rad(aDeg);
+  rodG.setAttribute('transform', `rotate(${(-aDeg).toFixed(2)} ${PV.x} ${PV.y})`);
+  // Тяги: от стойки к концам площадки
+  const c = Math.cos(a), s = Math.sin(a);
+  const end = dx => ({ x: PV.x + dx * c - 3 * s, y: PV.y - dx * s - 3 * c });
+  const eL = end(-40), eR = end(36);
+  rStrutL.setAttribute('x1', PV.x - 8); rStrutL.setAttribute('y1', PV.y + 46); rStrutL.setAttribute('x2', eL.x); rStrutL.setAttribute('y2', eL.y);
+  rStrutR.setAttribute('x1', PV.x + 8); rStrutR.setAttribute('y1', PV.y + 46); rStrutR.setAttribute('x2', eR.x); rStrutR.setAttribute('y2', eR.y);
+  // Кивок: выходит из зажима по оси хлыста и гнётся к кончику
+  const k = clipPoint(aDeg);
+  const cx = k.x + Math.cos(a) * LK * 0.55, cy = k.y - Math.sin(a) * LK * 0.55;
+  rKivok.setAttribute('d', `M${k.x.toFixed(1)},${k.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${kiv.x.toFixed(1)},${kiv.y.toFixed(1)}`);
+  rBall.setAttribute('cx', kiv.x.toFixed(1)); rBall.setAttribute('cy', kiv.y.toFixed(1));
+}
+
+// Касание и протяжка по шкале
+let dragging = false;
+function pointerAngle(e) {
+  const p = svgR.createSVGPoint();
+  p.x = e.clientX; p.y = e.clientY;
+  const s = p.matrixTransform(svgR.getScreenCTM().inverse());
+  const d = Math.hypot(s.x - PV.x, s.y - PV.y);
+  if (d < 40 || (!dragging && d > R + 60)) return null;   // клики по воде и дну угол не трогают
+  return Math.atan2(PV.y - s.y, s.x - PV.x) * 180 / Math.PI;
+}
+svgR.addEventListener('pointerdown', e => {
+  const a = pointerAngle(e); if (a === null) return;
+  dragging = true; svgR.setPointerCapture(e.pointerId); setAngle(a);
+});
+svgR.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const a = pointerAngle(e); if (a !== null) setAngle(a);
+});
+['pointerup', 'pointercancel'].forEach(t => svgR.addEventListener(t, () => { dragging = false; }));
+
+// ── Приманка клиента: чёрная спинка, красное брюхо, гребень, плавники, завитой хвост
+// Локальные координаты: головка в (0,0), смотрит вдоль +x, тело уходит назад (−x).
+// v0.11: у каждой формы своя группа. lureG — положение и поворот, lureS — масштаб
+// по весу. Группа твистера по старой памяти зовётся lureForms.jig.
+// Точка (0,0) — там, где привязана леска; у джига это центр головки (петля
+// впереди на HEAD_R), у остальных — заводное колечко.
+function buildLure() {
+  lureG = el('g', {}, svgR);
+  lureS = el('g', {}, lureG);
+  const hookC = '#6b7178';
+
+  // Твистер (v0.16): ребристое силиконовое тело и хвост-лента. Цвета — TW_COL.
+  const gj = lureForms.jig = el('g', {}, lureS);
+  lureParts.tail = el('path', { fill: TW_COL.tail, stroke: TW_COL.edge, 'stroke-width': 0.5, 'stroke-linejoin': 'round' }, gj);
+  // Тело: от головки (x≈−2) к хвосту (x=−31), чуть сужается, край волнистый от колец
+  {
+    let top = '', bot = '';
+    for (let x = -2; x >= -31; x -= 0.5) {
+      const k = (x + 2) / -29;                                       // 0 у головки → 1 у хвоста
+      const t = 3.7 - 1.1 * k + 0.35 * Math.abs(Math.sin(Math.PI * (x + 4) / 2.2));
+      top += (x === -2 ? 'M' : 'L') + x.toFixed(1) + ',' + (-t).toFixed(2);
+      bot = 'L' + x.toFixed(1) + ',' + t.toFixed(2) + bot;
+    }
+    el('path', { d: top + bot.replace(/^L/, 'L') + 'Z', fill: TW_COL.body, stroke: TW_COL.edge, 'stroke-width': 0.4 }, gj);
+  }
+  el('path', { d: 'M-4,1.6 C-13,3 -22,2.4 -30,1.4', fill: 'none', stroke: TW_COL.belly, 'stroke-width': 1.2, opacity: 0.7 }, gj);   // светлое брюхо
+  const rings = el('g', { stroke: TW_COL.ring, 'stroke-width': 0.6, fill: 'none' }, gj);
+  for (let x = -6; x >= -30; x -= 2.2) {
+    const t = 3.7 - 1.1 * ((x + 2) / -29) + 0.3;
+    el('path', { d: `M${x},${-t} q-0.9,${t} 0,${2 * t}` }, rings);                                                              // кольцо
+  }
+  el('circle', { cx: 0, cy: 0, r: HEAD_R, fill: '#2d3237' }, gj);                                                                    // джиг-головка
+  el('circle', { cx: 1.4, cy: -1.6, r: 1.5, fill: '#8b949d', opacity: 0.8 }, gj);
+  el('circle', { cx: 2.2, cy: 0.4, r: 1.1, fill: '#f2f2f2' }, gj);                                                                   // глаз
+  el('circle', { cx: 2.5, cy: 0.4, r: 0.55, fill: '#111' }, gj);
+  el('path', { d: 'M-14,-3.2 q0,-4.8 4.2,-5 q2.6,0 3,1.9 M-6.8,-6.3 l-1.6,0.2', fill: 'none', stroke: hookC, 'stroke-width': 0.9, 'stroke-linecap': 'round' }, gj);   // крючок из спины, жало к головке (v0.17)
+  // v0.14: ушко джиг-головки — СВЕРХУ груза. Рисуется отдельно, в мировых
+  // координатах (всегда над головкой, как бы ни повернулось тело) — см. lureParts.eye ниже.
+
+  // Мормышка: вольфрамовая капля, колечко сверху, крючок из нижнего края
+  const gm = lureForms.mormyshka = el('g', {}, lureS);
+  el('path', { d: 'M-8,0 q-5,0 -6,4.5 q0,4 4.5,3.2', fill: 'none', stroke: hookC, 'stroke-width': 0.9, 'stroke-linecap': 'round' }, gm);   // крючок
+  el('path', { d: 'M-1.2,-1.4 C-3,-3.8 -9.5,-4.6 -10.5,0 C-9.5,4.6 -3,3.8 -1.2,1.4 Z', fill: '#3b3f45' }, gm);                         // капля
+  el('ellipse', { cx: -6.5, cy: -1.6, rx: 2.4, ry: 1, fill: '#a7b0ba', opacity: 0.75 }, gm);                                           // блик
+  el('circle', { cx: -11, cy: 0, r: 1.5, fill: '#e0312b' }, gm);                                                                         // бусинка
+  // Наживка (v0.12): два мотыля на крючке — из-за них мормышка тонет медленнее
+  lureParts.bait = el('path', { d: 'M-13,5 q-4,1 -6,5 q-1,3 1,5 M-12,7 q-2,3 0,7 q1,2 3,2', fill: 'none', stroke: '#b3122a', 'stroke-width': 1.6, 'stroke-linecap': 'round' }, gm);
+  el('circle', { cx: 0, cy: 0, r: 1.2, fill: 'none', stroke: hookC, 'stroke-width': 0.7 }, gm);                                        // колечко
+
+  // Колебалка: узкая латунная блесна (как «Окуневая» 37 мм), колечко у узкого конца, крючок у широкого
+  const gs = lureForms.spoon = el('g', {}, lureS);
+  const gold = el('linearGradient', { id: 'gSpoon', x1: 0, y1: 0, x2: 0, y2: 1 }, svgR.querySelector('defs'));
+  [[0, '#f3dd7a'], [0.5, '#c9a43a'], [1, '#8c6c1c']].forEach(([o, c]) => el('stop', { offset: o, 'stop-color': c }, gold));
+  el('path', { d: 'M-31,0 l-2.5,0 q-4.5,0 -4.5,4.2 q0,3.4 3.4,2.8 M-34.6,7 l1.6,-2', fill: 'none', stroke: hookC, 'stroke-width': 1, 'stroke-linecap': 'round' }, gs);   // крючок
+  el('path', { d: 'M-1.5,0 C-6,-2.4 -20,-4.2 -30,-2 L-31.5,0 L-30,2 C-20,4.2 -6,2.4 -1.5,0 Z', fill: 'url(#gSpoon)', stroke: '#6e5414', 'stroke-width': 0.5 }, gs);
+  el('path', { d: 'M-5,-0.6 C-12,-2.2 -21,-2.6 -27,-1.4', fill: 'none', stroke: '#fff6c8', 'stroke-width': 0.8, opacity: 0.8 }, gs);   // блик по ребру
+  el('circle', { cx: 0, cy: 0, r: 1.3, fill: 'none', stroke: hookC, 'stroke-width': 0.7 }, gs);                                         // колечко
+
+  // Балансир: горизонтальный корпус, колечко на спине, крючки спереди и сзади, тройник снизу, пластиковый хвост
+  const gb = lureForms.balancer = el('g', {}, lureS);
+  // v0.13: одинарные крючки загнуты жалом ВВЕРХ (как у настоящих балансиров):
+  // передний выходит из носа вперёд, задний — из-под хвоста назад
+  el('path', { d: 'M10,6.6 L14,6.6 q3,0 3,-3 l0,-2.4 M17,1.2 l-1.3,1.5 M-13,6.6 L-17,6.6 q-3,0 -3,-3 l0,-2.4 M-20,1.2 l1.3,1.5',
+               fill: 'none', stroke: hookC, 'stroke-width': 0.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, gb);   // крючки
+  el('path', { d: 'M-13.5,4.6 L-19.5,1.8 L-19,9.6 L-13.5,7 Z', fill: 'rgba(235,70,45,.85)', stroke: '#8e2a18', 'stroke-width': 0.5 }, gb);   // хвост (меньше)
+  el('path', { d: 'M0,8.5 L0,11.5 M0,11.5 q-2.5,0 -2.5,2.2 M0,11.5 q2.5,0 2.5,2.2 M0,11.5 l0,2.6', fill: 'none', stroke: hookC, 'stroke-width': 0.8 }, gb);   // тройник
+  el('path', { d: 'M11,5.5 C11,2.4 5,1.6 -5,2 L-14,4 L-14,7 L-5,9 C5,9.4 11,8.6 11,5.5 Z', fill: '#2f6f8f', stroke: '#173a4b', 'stroke-width': 0.5 }, gb);   // корпус
+  el('path', { d: 'M9,4.6 C4,3.2 -4,3.2 -12,4.6', fill: 'none', stroke: '#bfe3f2', 'stroke-width': 0.8, opacity: 0.7 }, gb);          // блик
+  el('circle', { cx: 7, cy: 4.6, r: 1.4, fill: '#ffd34d' }, gb);                                                                         // глаз
+  el('circle', { cx: 7.3, cy: 4.6, r: 0.6, fill: '#111' }, gb);
+  el('path', { d: 'M0,2 L0,0', stroke: hookC, 'stroke-width': 0.8 }, gb);
+  el('circle', { cx: 0, cy: -0.6, r: 1.2, fill: 'none', stroke: hookC, 'stroke-width': 0.7 }, gb);                                     // колечко на спине
+
+  // Ушко джиг-головки (v0.14): всегда сверху груза, в мировых координатах
+  lureParts.eye = el('circle', { r: 1.3, fill: 'none', stroke: hookC, 'stroke-width': 0.8 }, svgR);
+}
+
+// Показать группу текущей формы и подогнать масштаб под вес
+function showLureForm() {
+  if (!lureS) return;
+  const g = L.form === 'twister' ? 'jig' : L.form;
+  for (const k in lureForms) lureForms[k].setAttribute('display', k === g ? 'inline' : 'none');
+  lureParts.tail.setAttribute('display', L.form === 'twister' ? 'inline' : 'none');
+  lureParts.eye.setAttribute('display', L.F.mode === 'jig' ? 'inline' : 'none');
+  lureS.setAttribute('transform', `scale(${L.sc.toFixed(3)})`);
+}
+
+// Хвост твистера (v0.16). Две формы и плавный переход между ними (lure.tf 0…1):
+//  покой  — свёрнут серпом;
+//  поток  — распрямлён назад лентой, по которой бежит волна от основания к кончику:
+//           около одной длины волны на хвост — «незаконченная восьмёрка», кончик загнут.
+// Лента широкая (как у настоящего твистера), у основания узкая, к кончику скруглена;
+// в волне её ширина «дышит» — лента поворачивается к нам то плашмя, то ребром.
+function drawLureShape() {
+  const N = 16, step = 2.4, f = lure.tf, ph = lure.tph;
+  let x = -30.5, y = 0, ang = Math.PI, curlAcc = Math.PI;
+  const P = [];
+  for (let i = 0; i <= N; i++) {
+    const s = i / N;
+    const wave = Math.PI + (0.95 * (0.3 + 0.7 * s)) * Math.sin(ph - 6.4 * s) + 1.3 * Math.max(0, s - 0.72) / 0.28 * 0.6;
+    const breath = 0.06 * Math.sin(ph * 0.6 - s * 3);             // в покое хвост чуть «дышит»
+    ang = curlAcc * (1 - f) + wave * f + breath * (1 - f);
+    const wBase = 1.0 + 3.6 * Math.pow(Math.sin(Math.PI * Math.min(1, s * 1.15)), 0.8);
+    const twist = f * (0.5 + 0.5 * Math.abs(Math.cos(ph - 6.4 * s))) + (1 - f);
+    P.push({ x, y, ang, w: Math.max(0.6, wBase * twist) * (s > 0.9 ? (1 - (s - 0.9) * 6) : 1) });
+    curlAcc += 0.16 + 0.24 * s;
+    x += Math.cos(ang) * step; y += Math.sin(ang) * step;
+  }
+  let Lp = '', Rr = '';
+  P.forEach((p, i) => {
+    const nx = -Math.sin(p.ang) * p.w, ny = Math.cos(p.ang) * p.w;
+    Lp += (i ? 'L' : 'M') + (p.x + nx).toFixed(1) + ',' + (p.y + ny).toFixed(1);
+    Rr = 'L' + (p.x - nx).toFixed(1) + ',' + (p.y - ny).toFixed(1) + Rr;
+  });
+  const e = P[N];
+  lureParts.tail.setAttribute('d', Lp + ` Q${(e.x + Math.cos(e.ang) * 3).toFixed(1)},${(e.y + Math.sin(e.ang) * 3).toFixed(1)} ` +
+    Rr.slice(1) + 'Z');
+}
+
+// ── Физика: жёсткий хлыст → пружинный кивок → леска → приманка ─
+const kiv  = { x: 0, y: 0, vx: 0, vy: 0 };
+const lure = { x: 0, y: 0, vx: 0, vy: 0, phi: -Math.PI / 2, om: 0, phase: 0,
+               glide: 1, wasSlack: false, flip: false, slack: 0,
+               face: 1, tilt: 0, // балансир: куда смотрит нос и наклон корпуса
+               tf: 0, tph: 0,     // твистер: насколько хвост распрямлён потоком (0…1) и фаза его волны
+               theta: 95 * Math.PI / 180, tside: 1,   // джиг/твистер: угол хвоста от вертикали вверх и в какую сторону хвост
+               falling: false,   // идёт вниз (начало падения выбирает сторону)
+               side: 1,          // колебалка/балансир: куда сносит в этом падении
+               alpha: 0,         // колебалка: угол «кольцо → крючок» от вертикали вниз, рад (±80°, крючок не выше кольца)
+               a0: 0.4, leafT: 0, leafF: 1.5, leafOn: false };   // колебалка: снос, время и частота «листа»
+let mud = [];
+
+function initPhysics() {
+  const r = staticTip(rod.a);
+  kiv.x = r.x; kiv.y = r.y; kiv.vx = kiv.vy = 0;
+  lure.x = kiv.x; lure.y = Math.min(kiv.y + LLINE, BOT_Y - L.botR); lure.vx = lure.vy = 0;
+  rod.prev = rod.a;
+}
+
+function puff(x, y, power) {
+  const n = Math.min(12, 4 + Math.round(power / 60));
+  for (let i = 0; i < n; i++) {
+    if (mud.length > 40) break;
+    const c = el('circle', { r: 2 }, muddyG);
+    mud.push({ c, x: x + (Math.random() - 0.5) * 16, y: y + 2, vx: (Math.random() - 0.5) * 40,
+               vy: -10 - Math.random() * power * 0.15, t: 0, life: 1.6 + Math.random(), r0: 1.5 + Math.random() * 2 });
+  }
+}
+
+function physics(dt, aFrom, aTo) {
+  const h = dt / SUB;
+  const restV0 = kivokRest(aFrom), restV1 = kivokRest(aTo);
+  // v0.10: приманка тонет со СВОЕЙ скоростью L.vt (расчёт по весу и форме).
+  // Подтяжки к скорости кончика больше нет: обогнал кончик — леска провисла.
+  const G = L.acc;                         // вес в воде / (масса + присоединённая вода), px/с²
+  const cDrag = G / (L.vt * L.vt);         // квадратичное сопротивление: на L.vt оно = весу
+  const wT = 1 / MK, wM = 1 / L.mEff;      // кто сколько уступает, когда леска натянута
+  const F = L.F;
+  // dt первого кадра бывает чуть меньше нуля (метка rAF раньше performance.now)
+  const dtp = Math.max(dt, 0);
+  const A80 = 80 * Math.PI / 180;
+  const nearBottom = lure.y >= BOT_Y - L.botR - 1;
+  // Новое падение = идёт вниз сейчас, а в прошлом кадре не шла (флаг обновляем здесь же,
+  // иначе фронт падения не поймать — так в первой сборке v0.12 сторона не менялась)
+  const downNow = lure.vy > 0.05 * S && !nearBottom;
+  const fallStart = downNow && !lure.wasDown;
+  lure.wasDown = downNow;
+
+  // Колебалка — падающий лист (v0.12). Угол alpha: 0 — крючок прямо вниз,
+  // ±80° — почти плашмя; выше горизонта крючок не поднимается никогда.
+  // На падении: средний наклон в случайную сторону (side·a0) + качание ±40°,
+  // поэтому блесна идёт зигзагом, но в целом сносится вбок, крючком вперёд.
+  // Висит или поднимается — крючок от лески; лежит на дне — плашмя.
+  if (F.mode === 'spoon') {
+    if (fallStart) {
+      lure.side = Math.random() < 0.5 ? -1 : 1;
+      lure.a0 = (16 + 16 * Math.random()) * Math.PI / 180;
+      lure.leafT = Math.random() * 0.4; lure.leafF = 2.4 + 1.0 * Math.random();   // качаний в секунду
+    }
+    lure.leafOn = lure.vy > 0.05 * S && !nearBottom;
+    let aT;
+    if (lure.leafOn) {
+      lure.leafT += dtp;
+      aT = lure.side * lure.a0 + 0.7 * Math.sin(2 * Math.PI * lure.leafF * lure.leafT);
+    } else if (nearBottom) aT = lure.side * A80;
+    else aT = Math.atan2(lure.x - kiv.x, lure.y - kiv.y);   // висит по леске
+    aT = clamp(aT, -A80, A80);
+    lure.alpha += (aT - lure.alpha) * Math.min(1, dtp * 8);
+  }
+  // Балансир: каждое падение — в случайную сторону
+  if (F.mode === 'bal' && fallStart) lure.side = Math.random() < 0.5 ? -1 : 1;
+  const KLAT = 20;                         // как быстро боковая скорость выходит на нужную, 1/с
+
+  let prevRest = restV0, kPrev = clipPoint(aFrom);
+  for (let i = 1; i <= SUB; i++) {
+    const a = aFrom + (aTo - aFrom) * (i / SUB);
+    const rest = kivokRest(a);
+    const rvx = (rest.x - prevRest.x) / h, rvy = (rest.y - prevRest.y) / h;
+    prevRest = rest;
+    // Кивок: пружина к положению покоя, затухание относительно хлыста
+    kiv.vx += (KK * (rest.x - kiv.x) - CK * (kiv.vx - rvx)) * h;
+    kiv.vy += (KK * (rest.y - kiv.y) - CK * (kiv.vy - rvy)) * h;
+    kiv.x += kiv.vx * h; kiv.y += kiv.vy * h;
+
+    // Приманка: вес, сопротивление воды, уход в сторону на падении — у каждой формы свой
+    const sp = Math.hypot(lure.vx, lure.vy);
+    let ax = -cDrag * sp * lure.vx - 1.2 * lure.vx;
+    let ay = G - cDrag * sp * lure.vy;
+    // Уход в сторону на падении (v0.12): задаём, какой должна быть боковая
+    // скорость, — долю от скорости падения, — и подтягиваем к ней. Вода при этом
+    // вбок не тормозит: это и есть планирование (подъёмная сила пластины).
+    let lat = null;
+    if (F.mode === 'spoon') {
+      if (lure.leafOn) lat = F.glide * clamp(Math.tan(lure.alpha), -2.5, 2.5) * lure.vy;   // крючком вперёд
+      else if (lure.vy < 0) ax -= 8 * lure.vx;                                             // подъём — ровно за леской
+    } else if (F.mode === 'bal') {
+      if (lure.vy > 0 && lure.y < BOT_Y - L.botR - 1) lat = lure.side * F.glide * lure.vy; // дугой, леска вернёт
+    } else if (lure.slack > 2 && lure.vy > 0) {
+      lat = lure.glide * F.glide * lure.vy;                                                 // джиг, мормышка: на слабой леске
+    }
+    if (lat !== null) {
+      // У края кадра снос плавно гаснет, чтобы приманка не упиралась в «стену»
+      lat *= lat > 0 ? clamp((386 - lure.x) / 90, 0, 1) : clamp((lure.x - 14) / 90, 0, 1);
+      ax = (lat - lure.vx) * KLAT;
+    }
+    lure.vx += ax * h; lure.vy += ay * h;
+    lure.x += lure.vx * h; lure.y += lure.vy * h;
+
+    // Леска нерастяжима: натянулась — тянет приманку и гнёт кивок
+    let dx = lure.x - kiv.x, dy = lure.y - kiv.y, d = Math.hypot(dx, dy);
+    if (d > LLINE) {
+      const nx = dx / d, ny = dy / d, corr = d - LLINE;
+      lure.x -= nx * corr * wM / (wT + wM); lure.y -= ny * corr * wM / (wT + wM);
+      kiv.x  += nx * corr * wT / (wT + wM); kiv.y  += ny * corr * wT / (wT + wM);
+      const vrel = (lure.vx - kiv.vx) * nx + (lure.vy - kiv.vy) * ny;
+      if (vrel > 0) {
+        lure.vx -= nx * vrel * wM / (wT + wM); lure.vy -= ny * vrel * wM / (wT + wM);
+        kiv.vx  += nx * vrel * wT / (wT + wM); kiv.vy  += ny * vrel * wT / (wT + wM);
+      }
+    }
+    // Кивок не тянется, а гнётся: кончик всегда на длине кивка от зажима
+    const k = clipPoint(a), kx = kiv.x - k.x, ky = kiv.y - k.y, kd = Math.hypot(kx, ky) || 1;
+    const knx = kx / kd, kny = ky / kd;
+    kiv.x = k.x + knx * LK; kiv.y = k.y + kny * LK;
+    const kvx = (k.x - (kPrev.x)) / h, kvy = (k.y - kPrev.y) / h;
+    const vr = (kiv.vx - kvx) * knx + (kiv.vy - kvy) * kny;
+    kiv.vx -= knx * vr; kiv.vy -= kny * vr;
+    kPrev = k;
+    // Леска не тянется (v0.12): кивок уже на своём месте, поэтому лишнюю длину
+    // добираем только приманкой. Без этого под 15 г леска «вытягивалась» на ~3 см.
+    {
+      const ex = lure.x - kiv.x, ey = lure.y - kiv.y, ed = Math.hypot(ex, ey);
+      if (ed > LLINE) {
+        const nx = ex / ed, ny = ey / ed;
+        lure.x = kiv.x + nx * LLINE; lure.y = kiv.y + ny * LLINE;
+        const vo = (lure.vx - kiv.vx) * nx + (lure.vy - kiv.vy) * ny;
+        if (vo > 0) { lure.vx -= nx * vo; lure.vy -= ny * vo; }
+      }
+    }
+    // Лёд сверху, дно снизу
+    if (lure.y < ICE_BOT + 12) { lure.y = ICE_BOT + 12; if (lure.vy < 0) lure.vy = 0; }
+    if (lure.y > BOT_Y - L.botR) {
+      if (lure.vy > 0.08 * S) puff(lure.x, BOT_Y, lure.vy / S * 400);
+      lure.y = BOT_Y - L.botR;
+      if (lure.vy > 0) lure.vy *= -0.12;
+      lure.vx *= 1 - Math.min(1, 9 * h);
+    }
+    // По бокам — край кадра (в лунке приманка дальше и не уйдёт: леска не пустит)
+    if (lure.x < 14)  { lure.x = 14;  if (lure.vx < 0) lure.vx = 0; }
+    if (lure.x > 386) { lure.x = 386; if (lure.vx > 0) lure.vx = 0; }
+  }
+  lure.falling = lure.vy > 0.05 * S && lure.y < BOT_Y - L.botR - 1;
+  lure.slack = LLINE - Math.hypot(lure.x - kiv.x, lure.y - kiv.y);
+  const slackNow = lure.slack > 2;
+  if (slackNow && !lure.wasSlack && F.mode !== 'bal') lure.glide = -lure.glide;   // каждый новый провис — в другую сторону
+  lure.wasSlack = slackNow;
+
+  const sp = Math.hypot(lure.vx, lure.vy);
+  const onBottom = lure.y >= BOT_Y - L.botR - 0.5 && sp < 0.07 * S;
+  lure.phase += (2.2 + sp / S * 50) * dt;
+  // Хвост твистера: от 2 см/с поток начинает его распрямлять, к 10 см/с — полностью.
+  // Распрямляется быстро, сворачивается обратно не спеша. Волна чаще на скорости (2…7 Гц).
+  {
+    const spMs = sp / S, ft = clamp((spMs - 0.02) / 0.08, 0, 1);
+    lure.tf += (ft - lure.tf) * Math.min(1, Math.max(dt, 0) * (ft > lure.tf ? 12 : 2));
+    lure.tph += 2 * Math.PI * (2 + 5 * Math.min(spMs / 0.6, 1)) * Math.max(dt, 0) * (0.25 + 0.75 * lure.tf);
+  }
+
+  // Балансир всегда горизонтален: нос по ходу вбок, на падении нос клюёт вниз
+  if (F.mode === 'bal') {
+    if (Math.abs(lure.vx) > 0.04 * S) lure.face = Math.sign(lure.vx);
+    const want = onBottom ? 0 : clamp(lure.vy / L.vt, -1, 1) * 0.35;
+    lure.tilt += (want - lure.tilt) * Math.min(1, dt * 6);
+  } else if (F.mode === 'jig') {
+    // Твистер (v0.14): ушко сверху груза, поэтому хвостом вниз они не висят.
+    // theta — угол хвоста от вертикали ВВЕРХ: 90° — горизонт, 180° — отвесно вниз.
+    //   покой / натянутая леска — 95° (лёгкий провис хвоста, не ниже 100°);
+    //   падение — головка тянет вниз первой, хвост поднимается до ~35°;
+    //   резкий взмах вверх — хвост захлёстывает вниз до 170°, потом возвращается;
+    //   на дне — лёжа, 90°.
+    // Хвост уходит в сторону, противоположную боковому ходу (головка ведёт).
+    if (Math.abs(lure.vx) > 0.05 * S) lure.tside = -Math.sign(lure.vx);
+    const D = Math.PI / 180, upMs = -lure.vy / S;   // скорость вверх, м/с
+    let thT, k;
+    if (onBottom)                { thT = 90; k = 6; }
+    else if (lure.vy > 0.05 * S) { thT = 95 - 60 * Math.min(lure.vy / L.vt, 1); k = 6; }
+    else if (upMs > 0.08)        { thT = 95 + 75 * Math.min((upMs - 0.08) / 0.5, 1); k = 14; }
+    else                         { thT = 95; k = 4; }
+    lure.theta = clamp(lure.theta + (thT * D - lure.theta) * Math.min(1, dt * k), 20 * D, 170 * D);
+    // Хвост смотрит в (tside·sinθ, −cosθ), головка — в обратную сторону; рисунок головой по +x
+    lure.phi = Math.atan2(Math.cos(lure.theta), -lure.tside * Math.sin(lure.theta));
+    lure.om = 0;
+  } else if (F.mode === 'spoon') {
+    // Колебалка: корпус ставим прямо по углу alpha. Крючок у рисунка на −x,
+    // поэтому направление «на крючок» (sin α, cos α) даёт phi = atan2(−cos α, −sin α).
+    lure.phi = Math.atan2(-Math.cos(lure.alpha), -Math.sin(lure.alpha));
+    lure.om = 0;
+  } else {
+
+  // Поворот корпуса: висит — к леске; идёт — по ходу; на дне — лёжа
+  let tx, ty;
+  if (onBottom) { tx = lure.glide; ty = 0.25; }
+  else {
+    const w = Math.min(sp / (0.3 * S), 1) * (F.mode === 'hang' ? 0.3 : 1);   // мормышка почти всегда отвесно
+    const hx = kiv.x - lure.x, hy = kiv.y - lure.y, hl = Math.hypot(hx, hy) || 1;
+    const hang = slackNow ? { x: lure.glide * 0.6, y: 0.8 } : { x: hx / hl, y: hy / hl };
+    tx = hang.x * (1 - w) + (lure.vx / (sp || 1)) * w;
+    ty = hang.y * (1 - w) + (lure.vy / (sp || 1)) * w;
+  }
+  // У дна корпус не может уйти в грунт: чем ближе дно, тем сильнее приманка ложится
+  const lie = clamp((36 - (BOT_Y - lure.y)) / 28, 0, 1);
+  if (lie > 0) { tx = tx * (1 - lie) + lure.glide * lie; ty = ty * (1 - lie) + 0.12 * lie; }
+  let diff = Math.atan2(ty, tx) - lure.phi;
+  diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+  lure.om += (40 * diff - 9 * lure.om) * dt;
+  lure.phi += lure.om * dt;
+  }   // конец «не балансир»
+
+  // Муть оседает
+  mud = mud.filter(m => {
+    m.t += dt;
+    if (m.t > m.life) { m.c.remove(); return false; }
+    m.vy += 14 * dt; m.vx *= 1 - dt * 1.5; m.vy *= 1 - dt * 1.2;
+    m.x += m.vx * dt; m.y = Math.min(m.y + m.vy * dt, BOT_Y + 2);
+    const k = m.t / m.life;
+    m.c.setAttribute('cx', m.x.toFixed(1)); m.c.setAttribute('cy', m.y.toFixed(1));
+    m.c.setAttribute('r', (m.r0 + k * 5).toFixed(1)); m.c.setAttribute('opacity', (0.55 * (1 - k)).toFixed(2));
+    return true;
+  });
+}
+
+// Леска: кончик → (лишняя леска петлёй над лункой) → прямо под водой к приманке
+function drawLine() {
+  const T = kiv, M = lure;
+  const f = (ICE_TOP - T.y) / Math.max(1e-3, M.y - T.y);
+  const P = { x: T.x + (M.x - T.x) * clamp(f, 0, 1), y: ICE_TOP };
+  const air = Math.max(4, Math.hypot(P.x - T.x, P.y - T.y));
+  const slack = Math.max(0, lure.slack);
+  const d = Math.min(Math.sqrt(3 * air * slack / 8), 26);
+  const mx = (T.x + P.x) / 2 - d * 2, my = (T.y + P.y) / 2 + Math.min(slack, air) * 0.25;
+  // Где леска привязана: у джига — ушко СВЕРХУ головки (v0.14), у балансира — колечко
+  // на спине, у остальных — колечко в самой точке приманки
+  const mode = L.F.mode;
+  let hx = M.x, hy = M.y;
+  if (mode === 'jig') {
+    const ey = M.y - (HEAD_R + 1.2) * L.sc;
+    lureParts.eye.setAttribute('cx', M.x.toFixed(1)); lureParts.eye.setAttribute('cy', ey.toFixed(1));
+    lureParts.eye.setAttribute('r', (1.3 * L.sc).toFixed(2));
+    hy = ey - 1.3 * L.sc;
+  }
+  else if (mode === 'bal') hy -= 0.6 * L.sc;
+  rLine.setAttribute('d', `M${T.x.toFixed(1)},${T.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${P.x.toFixed(1)},${P.y.toFixed(1)} L${hx.toFixed(1)},${hy.toFixed(1)}`);
+
+  if (mode === 'bal') {
+    // Балансир не переворачивается брюхом вверх: смотрит влево — просто зеркалим
+    lureG.setAttribute('transform', `translate(${M.x.toFixed(1)},${M.y.toFixed(1)}) scale(${lure.face},1) rotate(${(lure.tilt * 180 / Math.PI).toFixed(1)})`);
+    return;
+  }
+  const deg = lure.phi * 180 / Math.PI, c = Math.cos(lure.phi);
+  if (c < -0.3) lure.flip = true; else if (c > 0.3) lure.flip = false;   // брюхо всегда книзу
+  lureG.setAttribute('transform', `translate(${M.x.toFixed(1)},${M.y.toFixed(1)}) rotate(${deg.toFixed(1)})${lure.flip ? ' scale(1,-1)' : ''}`);
+  if (L.form === 'twister') drawLureShape();
+}
+
+function drawMotes(t) {
+  for (const c of motesG.children) {
+    const x = c._x + Math.sin(t * 0.0003 * c._s + c._p) * 6, y = c._y + Math.cos(t * 0.00021 * c._s + c._p) * 4;
+    c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1));
+  }
+}
+
+// ── Проигрывание (точная копия машины состояний прошивки) ─────
+function startPlay(kind) {
+  if (!presets.length) { toast('Сначала запишите хотя бы одну пару'); return; }
+  const n = presets.length;
+  let order;
+  if (kind === 'all') order = [...Array(n).keys()];
+  else {
+    const s = clamp(sel, 0, n - 1);
+    order = kind === 'pair' ? [s] : [...Array(n).keys()].map(k => (s + k) % n);
+  }
+  play = { kind, order, oi: 0, cycle: 0, phase: -1, from: rod.a, to: rod.a, dur: 0, t0: performance.now(), cur: -1, txt: '' };
+  advance(play.t0);
+  $('btnStop').disabled = false;
+  $('btnPlay').textContent = '↻ Вся игра сначала';
+}
+
+function stopPlay() {
+  play = null;
+  $('btnStop').disabled = true;
+  $('btnPlay').textContent = '▶ Вся игра';
+  aim(); markPlaying(); updateStatus();
+}
+
+function advance(t) {
+  const pl = play;
+  pl.phase++;
+  if (pl.phase > 3) {
+    pl.phase = 0; pl.cycle++;
+    const done = presets[pl.order[pl.oi]];
+    if (pl.kind !== 'pair' && (!done || pl.cycle >= done.cycles)) {
+      pl.cycle = 0; pl.oi = (pl.oi + 1) % pl.order.length;
+    }
+  }
+  const p = presets[pl.order[pl.oi]];
+  if (!p) { stopPlay(); return; }
+  if (pl.cur !== pl.order[pl.oi]) { pl.cur = pl.order[pl.oi]; markPlaying(); }
+  const a0 = pl.to;
+  if (pl.phase === 0)      { pl.from = a0; pl.to = p.upAngle;   pl.dur = Math.abs(pl.to - pl.from) * SPEED_MS[p.upSpeed]; }
+  else if (pl.phase === 1) { pl.from = pl.to = p.upAngle;       pl.dur = p.upPause; }
+  else if (pl.phase === 2) { pl.from = a0; pl.to = p.downAngle; pl.dur = Math.abs(pl.to - pl.from) * SPEED_MS[p.downSpeed]; }
+  else                     { pl.from = pl.to = p.downAngle;     pl.dur = p.downPause; }
+  if ((pl.phase === 0 || pl.phase === 2) && pl.dur < 5) pl.dur = 0;   // servoMoveTo: <5 мс — сразу
+  pl.t0 = t;
+}
+
+function markPlaying() {
+  document.querySelectorAll('.pair').forEach(e =>
+    e.classList.toggle('playing', !!play && +e.dataset.i === play.cur));
+}
+
+function passMs() {
+  let a = 0, t = 0;
+  for (const p of presets)
+    for (let c = 0; c < p.cycles; c++) {
+      t += Math.abs(p.upAngle - a) * SPEED_MS[p.upSpeed] + p.upPause
+         + Math.abs(p.upAngle - p.downAngle) * SPEED_MS[p.downSpeed] + p.downPause;
+      a = p.downAngle;
+    }
+  return t;
+}
+
+// ── Главный цикл анимации ─────────────────────────────────────
+let last = performance.now();
+function frame(now) {
+  if (DEMO && DEMO_PAUSED) { requestAnimationFrame(frame); return; }
+  let dt = (now - last) / 1000; last = now;
+  if (dt > 0.25) { if (play) play.t0 += (dt - 0.016) * 1000; dt = 0.016; }   // вкладка спала
+  dt = Math.min(dt, 1 / 30);
+
+  if (play) {
+    let guard = 0;
+    while (play && now - play.t0 >= play.dur) {
+      if (++guard > 64) { stopPlay(); toast('В игре нет движения — проверьте паузы'); break; }
+      advance(play.t0 + play.dur);
+    }
+    if (play) {
+      const f = play.dur > 0 ? clamp((now - play.t0) / play.dur, 0, 1) : 1;
+      rod.a = play.from + (play.to - play.from) * f;
+      updateStatus();
+    }
+  } else {
+    const d = rod.target - rod.a, step = dt * 1000 / rod.mpd;
+    rod.a = Math.abs(d) <= step ? rod.target : rod.a + Math.sign(d) * step;
+  }
+
+  // Физика: жёсткий хлыст ведёт пружинный кивок, кивок через леску — приманку
+  const aFrom = rod.prev; rod.prev = rod.a;
+  physics(dt, aFrom, rod.a);
+  drawRod();
+  drawLine();
+  drawMotes(now);
+  updateFish(dt);
+
+  requestAnimationFrame(frame);
+}
+
+// ── Панель шага ───────────────────────────────────────────────
+function controlsHTML() {
+  const wp = workPart(), sp = workSpeed(), pa = workPause();
+  return `
+    <div class="lbl">Угол ${wp === 'up' ? 'верха' : 'низа'} — нажмите на шкалу у кончика</div>
+    <div class="angle-row">
+      <button class="stepbtn" data-act="minus" aria-label="На градус ниже">−1°</button>
+      <div class="angle-val" id="pAngle"></div>
+      <button class="stepbtn" data-act="plus" aria-label="На градус выше">+1°</button>
+    </div>
+    <div class="edge" id="pEdge"></div>
+    <div class="lbl">Скорость хода ${wp === 'up' ? 'вверх' : 'вниз'}: <b id="pSpdLbl">${SPEED_LBL[sp]}</b></div>
+    <div class="speed">${[1, 2, 3, 4, 5].map(v => `<button data-spd="${v}" class="${v === sp ? 'on' : ''}">${v}</button>`).join('')}</div>
+    <label class="lbl" for="pPause">Пауза ${wp === 'up' ? 'вверху' : 'внизу'}, мс</label>
+    <input id="pPause" class="text short" type="number" inputmode="numeric" min="0" max="${PAUSE_MAX[wp]}" step="100" value="${pa}">
+    <div class="bite" id="pBite"></div>`;
+}
+function cyclesHTML(v) {
+  return `<label class="lbl" for="pCycles">Серия — сколько раз повторить пару</label>
+    <input id="pCycles" class="text short" type="number" inputmode="numeric" min="1" max="999" value="${v}">`;
+}
+
+function renderPanel() {
+  const pn = $('panel');
+  if (mode === 'edit') {
+    const p = presets[sel];
+    pn.innerHTML = `
+      <div class="ph"><h2>Пара №${sel + 1}</h2><button class="lnk" data-act="done">Готово</button></div>
+      <label class="lbl" for="pName">Название пары</label>
+      <input id="pName" class="text" value="${esc(p.name)}">
+      <div class="seg">
+        <button data-part="up" class="${part === 'up' ? 'on up' : ''}">↑ Верх <span id="segUp"></span></button>
+        <button data-part="down" class="${part === 'down' ? 'on dn' : ''}">↓ Низ <span id="segDn"></span></button>
+      </div>
+      ${controlsHTML()}
+      ${cyclesHTML(p.cycles)}
+      <div class="btns">
+        <button class="btn primary" data-act="playPair">▶ Эта пара</button>
+        <button class="btn" data-act="playFrom">▶ С этой пары</button>
+      </div>`;
+  } else {
+    const full = !draft && presets.length >= MAX_P;
+    const title = insertAt !== null ? `Новая пара → место №${insertAt + 1}` : `Новая пара №${presets.length + 1}`;
+    pn.innerHTML = `
+      <div class="ph"><h2>${title}</h2>${insertAt !== null ? '<button class="lnk" data-act="cancelIns">Отмена</button>' : ''}</div>
+      <div class="steps">
+        <span class="${draft ? 'done' : 'cur up'}">${draft ? '✓ ' : ''}1 · Верх</span>
+        <span class="${draft ? 'cur dn' : ''}">2 · Низ</span>
+      </div>
+      ${full
+        ? '<p class="warn">Записано 16 пар — это максимум. Удалите пару, чтобы записать новую.</p>'
+        : controlsHTML() + (draft ? cyclesHTML(rec.cycles) : '') + `
+      <div class="btns">
+        <button class="btn primary" data-act="remember">Запомнить ${draft ? 'низ' : 'верх'}</button>
+        ${draft ? '<button class="btn" data-act="undoUp">Отменить верх</button>' : ''}
+      </div>`}`;
+  }
+  bindPanelInputs();
+  updatePanelLive();
+}
+
+function bindPanelInputs() {
+  const pause = $('pPause');
+  if (pause) { pause.oninput = () => setPause(pause.value, false); pause.onchange = () => setPause(pause.value, true); }
+  const cyc = $('pCycles');
+  if (cyc) { cyc.oninput = () => setCycles(cyc.value, false); cyc.onchange = () => setCycles(cyc.value, true); }
+  const nm = $('pName');
+  if (nm) {
+    nm.oninput = () => {
+      const v = utf8Trim(nm.value, NAME_BYTES);
+      if (v !== nm.value) nm.value = v;
+      presets[sel].name = v || ('Пара ' + (sel + 1));
+      persist(); renderList();
+    };
+    nm.onchange = () => { if (!nm.value.trim()) nm.value = presets[sel].name; };
+  }
+}
+
+function updatePanelLive() {
+  const a = $('pAngle'); if (a) a.textContent = fmtA(workAngle());
+  const ed = $('pEdge');
+  if (ed) ed.textContent = Math.abs(workAngle()) > A_SAFE
+    ? `Дальше ±${A_SAFE}° — край хода: некалиброванный прибор остановится на ${fmtA(Math.sign(workAngle()) * A_SAFE)}`
+    : '';
+  if (mode === 'edit') {
+    const u = $('segUp'), d = $('segDn');
+    if (u) u.textContent = fmtA(presets[sel].upAngle);
+    if (d) d.textContent = fmtA(presets[sel].downAngle);
+  }
+  const b = $('pBite');
+  if (b) {
+    const ok = workPause() >= BITE_MIN;
+    b.className = 'bite ' + (ok ? 'ok' : 'no');
+    b.textContent = ok ? '🎣 В этой паузе ICE-TICK слушает поклёвку (режим ACTIVE)'
+                       : 'Пауза короче 0,82 с — поклёвку здесь не ловит';
+  }
+}
+
+$('panel').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.spd) { setSpeed(+t.dataset.spd); return; }
+  if (t.dataset.part) { part = t.dataset.part; renderPanel(); aim(); drawArcState(); return; }
+  switch (t.dataset.act) {
+    case 'minus':     setAngle(workAngle() - 1); break;
+    case 'plus':      setAngle(workAngle() + 1); break;
+    case 'remember':  remember(); break;
+    case 'undoUp':    rec.angle = draft.upAngle; draft = null; renderPanel(); aim(); drawArcState(); updateStatus(); break;
+    case 'cancelIns': insertAt = null; draft = null; renderPanel(); aim(); drawArcState(); updateStatus(); break;
+    case 'done':      exitEdit(); break;
+    case 'playPair':  startPlay('pair'); break;
+    case 'playFrom':  startPlay('from'); break;
+  }
+});
+
+function exitEdit() {
+  mode = 'record'; sel = -1; part = 'up'; insertAt = null; draft = null;
+  renderPanel(); renderList(); aim(); drawArcState(); updateStatus();
+}
+
+function scrollToViews() {
+  if (window.innerWidth < 820) document.querySelector('.views').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Лента пар ─────────────────────────────────────────────────
+function renderList() {
+  const list = $('list'), n = presets.length;
+  if (!n) list.innerHTML = '<p class="empty">Пар пока нет. Запишите первую: верх, затем низ.</p>';
+  else list.innerHTML = presets.map((p, i) => `
+    <div class="pair${i === sel ? ' sel' : ''}" data-i="${i}">
+      <div class="pair-main">
+        <div class="pair-top"><span class="pnum">${i + 1}</span><span class="pname">${esc(p.name)}</span><span class="cyc">×${p.cycles}</span></div>
+        <div class="pair-row up">↑ <span class="a">${fmtA(p.upAngle)}</span> · ск. ${p.upSpeed} · ${fmtS(p.upPause)} ${p.upPause >= BITE_MIN ? '🎣' : ''}</div>
+        <div class="pair-row dn">↓ <span class="a">${fmtA(p.downAngle)}</span> · ск. ${p.downSpeed} · ${fmtS(p.downPause)} ${p.downPause >= BITE_MIN ? '🎣' : ''}</div>
+      </div>
+      <div class="pair-act">
+        <button data-pa="up" title="Выше" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button data-pa="down" title="Ниже" ${i === n - 1 ? 'disabled' : ''}>↓</button>
+        <button data-pa="dup" title="Копия пары" ${n >= MAX_P ? 'disabled' : ''}>⧉</button>
+        <button data-pa="ins" title="Вставить новую пару после" ${n >= MAX_P ? 'disabled' : ''}>＋</button>
+        <button data-pa="del" class="del" title="Удалить">✕</button>
+      </div>
+    </div>`).join('');
+  $('stats').textContent = `Пар: ${n} из ${MAX_P}` + (n ? ` · один проход ≈ ${fmtDur(passMs())}` : '');
+  markPlaying();
+}
+
+$('list').addEventListener('click', e => {
+  const item = e.target.closest('.pair'); if (!item) return;
+  const i = +item.dataset.i;
+  const b = e.target.closest('button[data-pa]');
+  if (b) { if (!b.disabled) pairAction(b.dataset.pa, i); return; }
+  selectPair(i);
+});
+
+function selectPair(i) {
+  if (mode === 'record' && draft && !confirm('Незаконченная пара будет отменена. Продолжить?')) return;
+  draft = null; insertAt = null; mode = 'edit'; sel = i; part = 'up';
+  renderPanel(); renderList(); aim(); drawArcState(); updateStatus(); scrollToViews();
+}
+
+function swap(i, j) {
+  [presets[i], presets[j]] = [presets[j], presets[i]];
+  if (mode === 'edit') { if (sel === i) sel = j; else if (sel === j) sel = i; }
+}
+
+function pairAction(a, i) {
+  if (play) stopPlay();   // порядок пар меняется — проигрывание начнём заново
+  if (a === 'up' && i > 0) swap(i, i - 1);
+  else if (a === 'down' && i < presets.length - 1) swap(i, i + 1);
+  else if (a === 'dup') {
+    if (presets.length >= MAX_P) return;
+    const c = { ...presets[i] };
+    if (!AUTO.test(c.name)) c.name = utf8Trim(c.name + ' (2)', NAME_BYTES);
+    presets.splice(i + 1, 0, c);
+    if (mode === 'edit' && sel > i) sel++;
+    if (insertAt !== null && insertAt > i) insertAt++;
+    toast('Копия добавлена');
+  }
+  else if (a === 'ins') {
+    if (presets.length >= MAX_P) return;
+    mode = 'record'; sel = -1; part = 'up'; draft = null; insertAt = i + 1;
+    scrollToViews();
+  }
+  else if (a === 'del') {
+    if (!confirm(`Удалить пару №${i + 1} «${presets[i].name}»?`)) return;
+    presets.splice(i, 1);
+    if (mode === 'edit') {
+      if (sel === i) { mode = 'record'; sel = -1; part = 'up'; }
+      else if (sel > i) sel--;
+    }
+    if (insertAt !== null && insertAt > i) insertAt--;
+  }
+  renumber(); persist();
+  renderPanel(); renderList(); aim(); drawArcState(); updateStatus();
+}
+
+// ── Строка состояния ──────────────────────────────────────────
+function updateStatus() {
+  let html;
+  if (play) {
+    const p = presets[play.cur];
+    if (!p) return;
+    html = play.kind === 'pair'
+      ? `🔁 Пара <b>${play.cur + 1}</b> по кругу · <b>${PHASE[play.phase]}</b>`
+      : `▶ Пара <b>${play.cur + 1}</b> «${esc(p.name)}» · цикл ${play.cycle + 1} из ${p.cycles} · <b>${PHASE[play.phase]}</b>`;
+    if (html === play.txt) return;
+    play.txt = html;
+  } else if (mode === 'edit') {
+    html = `Правка пары <b>№${sel + 1}</b>: выберите верх или низ и нажмите на шкалу. «▶ Эта пара» сразу покажет результат.`;
+  } else if (!draft && presets.length >= MAX_P) {
+    html = 'Записано 16 пар — максимум. Нажмите на пару в списке, чтобы изменить её.';
+  } else if (draft) {
+    html = `Шаг 2: нажмите на шкалу и выберите <b>низ</b> пары (ниже ${fmtA(draft.upAngle)}), паузу и серию → «Запомнить низ».`;
+  } else {
+    html = 'Шаг 1: нажмите на шкалу у кончика и выберите <b>верх</b> пары, скорость и паузу → «Запомнить верх».';
+  }
+  $('status').innerHTML = html;
+}
+
+// ── Файл .lure ────────────────────────────────────────────────
+function saveLure() {
+  if (!presets.length) { toast('Сначала запишите хотя бы одну пару'); return; }
+  let name = (game.name || '').trim();
+  if (!name) {
+    name = (prompt('Название игры', 'Моя игра') || '').trim();
+    if (!name) return;
+    game.name = name; $('gameName').value = name; persist();
+  }
+  // Формат приложения ICE-TICK V.1.14 (exportLure). Только пары и название:
+  // настройки поклёвки — под снасть клиента, файл их трогать не должен.
+  const payload = {
+    app: 'ICE-TICK', version: 5, name,
+    presets: presets.map(p => ({
+      name: p.name, upAngle: p.upAngle, upSpeed: p.upSpeed, upPause: p.upPause,
+      downAngle: p.downAngle, downSpeed: p.downSpeed, downPause: p.downPause, cycles: p.cycles
+    }))
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (name.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_') || 'ICE-TICK_game') + '.lure';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(draft ? 'Сохранено. Незаконченная пара в файл не попала' : 'Файл сохранён: ' + a.download);
+}
+
+$('file').addEventListener('change', e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      const arr = Array.isArray(d) ? d : d.presets;
+      if (!Array.isArray(arr) || !arr.length) throw new Error('в файле нет пар');
+      if (play) stopPlay();
+      presets = arr.slice(0, MAX_P).map(normPreset);
+      game.presets = presets;
+      game.name = typeof d.name === 'string' ? d.name : '';
+      $('gameName').value = game.name;
+      mode = 'record'; sel = -1; part = 'up'; draft = null; insertAt = null;
+      renumber(); persist(); renderAll(); aim();
+      toast(`Открыто пар: ${presets.length}` + (arr.length > MAX_P ? ' (лишние отброшены)' : ''));
+    } catch (err) { toast('Не удалось открыть файл: ' + err.message); }
+  };
+  r.readAsText(f);
+});
+
+$('btnOpen').onclick = () => $('file').click();
+$('btnSave').onclick = saveLure;
+$('btnPlay').onclick = () => startPlay('all');
+$('btnStop').onclick = stopPlay;
+$('btnNew').onclick = () => {
+  if (presets.length && !confirm('Начать новую игру? Текущая будет стёрта.')) return;
+  if (play) stopPlay();
+  presets = []; game.presets = presets; game.name = ''; $('gameName').value = '';
+  mode = 'record'; sel = -1; part = 'up'; draft = null; insertAt = null;
+  persist(); renderAll(); aim();
+};
+$('gameName').addEventListener('input', e => { game.name = e.target.value; persist(); });
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function renderAll() { renderPanel(); renderList(); drawArcState(); updateStatus(); }
+
+// ── Приманка: форма и вес (только для просмотра, в .lure не попадают) ──
+const LURE_STORE = 'iceTickConstructor_lure';
+function setLure(form, g, save) {
+  g = clamp(Math.round(g * 2) / 2, W_MIN, W_MAX);
+  L = lureModel(form, g);
+  LLINE = lineFor(L.W, L.botR);            // глубину держим: на −65° приманка у дна
+  $('wt').value = g;
+  $('wtVal').textContent = g.toLocaleString('ru-RU') + ' г';
+  $('wtSink').textContent = 'тонет ' + Math.round(L.vtCm) + ' см/с';
+  document.querySelectorAll('#forms button').forEach(b => b.classList.toggle('on', b.dataset.form === L.form));
+  showLureForm();
+  if (save) { try { localStorage.setItem(LURE_STORE, JSON.stringify({ form: L.form, grams: g })); } catch (e) {} }
+}
+const setWeight = (g, save) => setLure(L.form, g, save);
+$('forms').innerHTML = FORM_KEYS.map(k => `<button data-form="${k}">${FORMS[k].name}</button>`).join('');
+$('forms').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setLure(b.dataset.form, L.grams, true); });
+$('wt').addEventListener('input', e => setWeight(+e.target.value, true));
+try {
+  const s = JSON.parse(localStorage.getItem(LURE_STORE));
+  if (s && s.grams) L = lureModel(s.form || 'twister', clamp(+s.grams, W_MIN, W_MAX));
+} catch (e) {}
+
+// ── Демо для главной страницы сайта: ?demo ───────────────────
+const DEMO = new URLSearchParams(location.search).has('demo');
+let DEMO_PAUSED = false;
+if (DEMO) {
+  document.body.classList.add('demo');
+  persist = function () {};                     // демо не трогает черновик пользователя
+  game = { name: 'Демо', presets: [
+    { name: 'Дрожь',   upAngle: 14, upSpeed: 4, upPause: 120, downAngle: 4,   downSpeed: 4, downPause: 120,  cycles: 6 },
+    { name: 'Подброс', upAngle: 34, upSpeed: 3, upPause: 700, downAngle: -12, downSpeed: 2, downPause: 1400, cycles: 2 },
+    { name: 'Стук',    upAngle: 4,  upSpeed: 5, upPause: 80,  downAngle: -4,  downSpeed: 5, downPause: 80,   cycles: 10 }
+  ].map(normPreset) };
+  presets = game.presets;
+  L = lureModel('mormyshka', 3);
+  window.addEventListener('message', function (e) {
+    if (e.data === 'icetick-demo-pause') DEMO_PAUSED = true;
+    if (e.data === 'icetick-demo-play')  DEMO_PAUSED = false;
+  });
+}
+// ── Старт ─────────────────────────────────────────────────────
+svgR.setAttribute('viewBox', '0 0 400 ' + SCENE_H);
+buildRod();
+buildFish();
+setLure(L.form, L.grams, false);
+initPhysics();
+$('gameName').value = game.name;
+renderAll();
+aim();
+requestAnimationFrame(frame);
+if (DEMO) startPlay('all');
+</script>
+
+<!-- FAQ конструктора (добавлено для сайта): окно поверх, открывается по #faq -->
+<section class="cfaq" id="faq" aria-labelledby="cfaq-h">
+  <div class="cfaq__box">
+    <a class="cfaq__close" href="#" aria-label="Закрыть">×</a>
+    <h2 class="cfaq__h" id="cfaq-h">Как пользоваться конструктором</h2>
+    <p class="cfaq__lead">Короткие ответы на&nbsp;частые вопросы. Если что-то осталось непонятным&nbsp;— <a href="mailto:support@ice-tick.com" style="color:inherit;text-decoration:underline">напишите нам</a>: <span style="white-space:nowrap">support@ice-tick.com</span>.</p>
+    <div class="cfaq__list">
+      <details class="cfaq__item"><summary>Что такое «пара»?</summary><div class="cfaq__a">Пара — одно движение кивка: подъём до угла «верх» с&nbsp;паузой и&nbsp;опускание до&nbsp;угла «низ» с&nbsp;паузой. Игра складывается из&nbsp;пар, в&nbsp;одной игре их может быть до&nbsp;16.</div></details>
+      <details class="cfaq__item"><summary>Как собрать первую игру?</summary><div class="cfaq__a"><ol><li>Кликните по&nbsp;шкале у&nbsp;кончика кивка&nbsp;— он встанет на&nbsp;этот угол. Точнее подправьте кнопками −1° и&nbsp;+1°.</li><li>Выберите скорость и&nbsp;паузу и&nbsp;нажмите «Запомнить верх».</li><li>Так же выберите низ, задайте серию и&nbsp;нажмите «Запомнить низ». Пара готова и&nbsp;появится в&nbsp;списке игры.</li><li>Добавьте ещё пары и&nbsp;нажмите «▶&nbsp;Вся игра», чтобы посмотреть результат.</li></ol></div></details>
+      <details class="cfaq__item"><summary>Какие углы можно задать?</summary><div class="cfaq__a">От&nbsp;−60° до&nbsp;+60°. 0° — горизонт, плюс — кончик выше горизонта, минус — ниже.</div></details>
+      <details class="cfaq__item"><summary>Что значат скорость и&nbsp;пауза?</summary><div class="cfaq__a">Скорость от&nbsp;1 (медленно) до&nbsp;5 (быстро) — как быстро кивок идёт к&nbsp;заданному углу. Пауза в&nbsp;миллисекундах — сколько он стоит в&nbsp;верхней или нижней точке. 1000&nbsp;мс — это 1&nbsp;секунда.</div></details>
+      <details class="cfaq__item"><summary>Что такое серия (×5)?</summary><div class="cfaq__a">Сколько раз подряд повторить пару, прежде чем перейти к&nbsp;следующей. Можно задать от&nbsp;1 до&nbsp;999.</div></details>
+      <details class="cfaq__item"><summary>Как изменить готовую пару?</summary><div class="cfaq__a">Кликните по&nbsp;паре в&nbsp;списке — она откроется для&nbsp;правки, а&nbsp;кнопкой «▶&nbsp;Эта пара» её можно сразу проверить. Стрелки ↑&nbsp;↓ меняют порядок, ⧉ копирует пару, ＋ вставляет новую, ✕ удаляет.</div></details>
+      <details class="cfaq__item"><summary>Что означает значок удочки 🎣?</summary><div class="cfaq__a">В&nbsp;этой паузе <b>ICE-TICK</b> слушает поклёвку. Так работает режим ACTIVE: при заводском времени поклёвки 100&nbsp;мс пауза должна быть не&nbsp;меньше 0,82&nbsp;с. В&nbsp;режиме ECO поклёвку прибор не&nbsp;слушает.</div></details>
+      <details class="cfaq__item"><summary>Как загрузить игру в&nbsp;ICE-TICK?</summary><div class="cfaq__a"><ol><li>Нажмите «Сохранить .lure» — файл сохранится на&nbsp;устройство.</li><li>В&nbsp;пульте ICE-TICK <b>сначала подключитесь к&nbsp;прибору</b>.</li><li>Откройте «Пресеты» → «Импорт .lure» и&nbsp;нажмите «Старт».</li></ol>Важно соблюдать порядок: если импортировать до&nbsp;подключения, при подключении прибор заменит список своей программой.</div></details>
+      <details class="cfaq__item"><summary>Можно ли открыть и&nbsp;доработать сохранённую игру?</summary><div class="cfaq__a">Да. Нажмите «Открыть .lure» и&nbsp;выберите файл — пары загрузятся в&nbsp;список, их можно править и&nbsp;сохранить снова. Так же открываются игры, которыми поделились другие рыбаки.</div></details>
+      <details class="cfaq__item"><summary>Сохраняется ли работа, если закрыть страницу?</summary><div class="cfaq__a">Черновик игры хранится в&nbsp;этом браузере и&nbsp;откроется при следующем входе. Но&nbsp;на&nbsp;другом устройстве или после очистки браузера его не&nbsp;будет, поэтому готовую игру сохраните файлом .lure. Кнопка «Новая» очищает текущую игру.</div></details>
+      <details class="cfaq__item"><summary>Какое название можно дать игре?</summary><div class="cfaq__a">Короткое: прибор хранит до&nbsp;23 байт — это около 11 русских или 23 латинских букв. Например: «Окунь_утро».</div></details>
+      <details class="cfaq__item"><summary>Насколько точна анимация приманки?</summary><div class="cfaq__a">Она показывает поведение примерно: как пойдёт твистер, мормышка, колебалка или балансир при выбранном весе. На&nbsp;льду всё решают вода, глубина и&nbsp;вес блесны. Форма и&nbsp;вес приманки нужны только для анимации и&nbsp;в&nbsp;файл .lure не&nbsp;попадают.</div></details>
+    </div>
+    <div class="cfaq__foot"><a class="site-back" href="#">Вернуться в&nbsp;конструктор</a><a class="site-back" href="index.html">← На главную ICE-TICK</a></div>
+  </div>
+</section>
+<script>document.addEventListener('keydown',function(e){if(e.key==='Escape'&&location.hash==='#faq'){location.hash='';}});</script>
+</body>
+</html>

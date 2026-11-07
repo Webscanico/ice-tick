@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульт ICE-TICK — управление кивком с телефона</title>
+<meta name="description" content="Пульт ICE-TICK открывается в браузере телефона: ничего не нужно скачивать. Настройка игры по Bluetooth, работа без интернета на льду.">
+<link rel="icon" type="image/png" href="img/favicon-64.png">
+<link rel="stylesheet" href="css/style-v2.css?v=80">
+<style>
+  .ap { max-width: 860px; margin: 0 auto; padding: 40px 16px 88px; font-family: var(--font-soft); color: #2c3d55; font-size: 17px; line-height: 1.6; }
+  .ap__back { display: inline-flex; margin-bottom: 28px; color: var(--blue); font-weight: 700; text-decoration: none; }
+  .ap h1 { font-family: var(--font-display); font-style: italic; font-weight: 800; font-size: clamp(32px, 4.4vw, 46px); color: var(--navy); line-height: 1.12; margin: 6px 0 14px; }
+  .ap h2 { font-family: var(--font-display); font-style: italic; font-weight: 800; font-size: 24px; color: var(--navy); margin: 0 0 14px; display: flex; align-items: center; gap: 12px; }
+  .ap p { margin: 0 0 12px; }
+  .ap__lead { font-size: 19px; color: #3d4d63; max-width: 680px; }
+  .ap__hero { display: grid; grid-template-columns: 1fr 260px; gap: 32px; align-items: center; margin-bottom: 36px; }
+  .ap__hero img { width: 100%; height: auto; filter: drop-shadow(0 18px 30px rgba(10,22,40,.25)); }
+  .ap__open { display: inline-flex; align-items: center; gap: 12px; margin-top: 10px; padding: 18px 30px; border-radius: 14px; background: var(--blue); color: #fff; font-weight: 800; font-size: 18px; text-decoration: none; box-shadow: 0 12px 28px rgba(10,102,232,.35); }
+  .ap__open:hover { background: #0a55c4; }
+  .ap__url { display: block; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .ap__card { background: #fff; border: 1px solid #e3ebf3; border-radius: 20px; padding: 28px 28px 20px; margin: 0 0 22px; box-shadow: 0 10px 30px rgba(16,35,63,.06); }
+  .ap__tag { display: inline-grid; place-items: center; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 10px; background: var(--navy); color: #00C8FF; font-family: var(--font-soft); font-style: normal; font-size: 14px; font-weight: 800; }
+  .ap ol, .ap ul { padding-left: 24px; margin: 0 0 12px; }
+  .ap li { margin: 0 0 10px; }
+  .ap ol { list-style: decimal; } .ap ol li::marker { color: var(--navy); font-weight: 800; }
+  .ap ul { list-style: disc; } .ap li::marker { color: var(--app-cyan); font-weight: 800; }
+  .ap b { color: var(--navy); }
+  .ap__note { background: #eaf6fd; border-left: 4px solid var(--app-cyan); border-radius: 10px; padding: 14px 18px; font-size: 16px; }
+  .ap__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .ap__grid .ap__card { margin: 0; }
+  .ap a:not(.ap__open):not(.ap__back) { color: var(--blue); }
+  @media (max-width: 760px) {
+    .ap__hero { grid-template-columns: 1fr; } .ap__hero img { max-width: 260px; justify-self: center; order: -1; }
+    .ap__grid { grid-template-columns: 1fr; }
+    .ap__card { padding: 22px 18px 14px; }
+    .ap__open { width: 100%; justify-content: center; }
+  }
+  .ap__flow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 14px; padding: 0; list-style: none !important; }
+  .ap__flow li { margin: 0; padding: 10px 14px; border-radius: 12px; background: #eef4fa; color: var(--navy); font-weight: 700; font-size: 15px; }
+  .ap__flow li::marker { content: none; }
+  .ap__arrow { color: var(--app-cyan); font-weight: 800; background: none !important; padding: 0 2px !important; }
+  .ap__no { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 6px; }
+  .ap__no div { background: #fff; border: 1px solid #e3ebf3; border-radius: 14px; padding: 12px 14px; font-size: 15px; font-weight: 600; color: var(--navy); }
+  .ap__no b { color: #12a36a; margin-right: 4px; }
+  @media (max-width: 760px) { .ap__no { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="ap">
+  <a class="ap__back" href="index.html">← На главную ICE-TICK</a>
+
+  <section class="ap__hero">
+    <div>
+      <p class="eyebrow">Пульт ICE-TICK</p>
+      <h1>Управление <span class="brand">ICE-TICK</span> с&nbsp;телефона</h1>
+      <p class="ap__lead"><span class="brand">Пульт ICE-TICK</span>&nbsp;— это страница нашего сайта, которая открывается в&nbsp;браузере телефона. Ничего не&nbsp;нужно скачивать из&nbsp;неизвестных источников: выберите игру, нажмите «Старт», и&nbsp;кивок работает. Интернет на&nbsp;льду не&nbsp;нужен.</p>
+      <a class="ap__open" href="pult/" target="_blank" rel="noopener">Открыть пульт <span aria-hidden="true">→</span></a>
+      <span class="ap__url">Адрес <span class="brand">пульта ICE-TICK</span>: ice-tick.com/pult</span>
+      <div class="ap__no">
+        <div><b>✓</b>Ничего не&nbsp;скачивается</div>
+        <div><b>✓</b>Без регистрации</div>
+        <div><b>✓</b>Работает без интернета</div>
+      </div>
+    </div>
+    <img src="img/app-presets.webp" alt="Экран пульта ICE-TICK: пресеты игры" width="480" height="671" loading="lazy">
+  </section>
+
+  <div class="ap__grid">
+    <section class="ap__card">
+      <h2><span class="ap__tag">A</span>Android</h2>
+      <ol>
+        <li>Откройте <b>ice-tick.com/pult</b> в&nbsp;браузере <b>Chrome</b>.</li>
+        <li>Чтобы <span class="brand">пульт ICE-TICK</span> был под рукой, добавьте ярлык: меню <b>⋮</b> → <b>«Добавить на&nbsp;главный экран»</b>. В&nbsp;некоторых версиях Chrome этот пункт называется «Установить»&nbsp;— это тот же ярлык на&nbsp;страницу, а&nbsp;не&nbsp;программа из&nbsp;интернета.</li>
+        <li>На&nbsp;экране появится значок <span class="brand">ICE-TICK</span>. Открывайте <span class="brand">пульт ICE-TICK</span> с&nbsp;него&nbsp;— в&nbsp;том числе на&nbsp;льду без сети.</li>
+        <li>При первом подключении разрешите <b>Bluetooth</b> и&nbsp;доступ к&nbsp;<b>«Устройствам поблизости»</b> (на&nbsp;старых Android&nbsp;— к&nbsp;геолокации).</li>
+      </ol>
+    </section>
+    <section class="ap__card">
+      <h2><span class="ap__tag">iOS</span>iPhone и iPad</h2>
+      <ol>
+        <li>Браузеры Safari и&nbsp;Chrome на&nbsp;iPhone не&nbsp;работают с&nbsp;Bluetooth-устройствами. Поставьте бесплатный браузер <b>Bluefy</b> из&nbsp;App Store.</li>
+        <li>Откройте в&nbsp;Bluefy адрес <b>ice-tick.com/pult</b>.</li>
+        <li>Добавьте страницу в&nbsp;закладки Bluefy, чтобы быстро её находить.</li>
+        <li>Перед выездом откройте <span class="brand">пульт ICE-TICK</span>, пока есть интернет, и&nbsp;не&nbsp;закрывайте вкладку.</li>
+      </ol>
+    </section>
+  </div>
+
+  <section class="ap__card" style="margin-top:22px">
+    <h2><span class="ap__tag">1</span>Подключение к ICE-TICK</h2>
+    <ol>
+      <li>Вставьте заряженный аккумулятор 18650 и&nbsp;включите <span class="brand">ICE-TICK</span>.</li>
+      <li>Включите Bluetooth на&nbsp;телефоне.</li>
+      <li>В&nbsp;<span class="brand">пульте ICE-TICK</span> нажмите <b>«Поиск новых устройств»</b> и&nbsp;выберите свой <span class="brand">ICE-TICK</span>. В&nbsp;следующий раз он&nbsp;будет в&nbsp;списке ваших устройств.</li>
+      <li>Выберите пресет или&nbsp;настройте игру: углы, скорость, паузы, число повторов. Нажмите <b>«▶ Старт»</b>.</li>
+    </ol>
+    <p>Настройки и&nbsp;программы сохраняются в&nbsp;самом кивке, поэтому телефон можно отключить и&nbsp;убрать в&nbsp;карман.</p>
+  </section>
+
+  <section class="ap__card">
+    <h2><span class="ap__tag">2</span>Свои игры из конструктора</h2>
+    <p><a href="constructor.html">Конструктор игры</a> рассчитан на&nbsp;компьютер: дома на&nbsp;большом экране удобно собрать игру по&nbsp;шагам и&nbsp;посмотреть, как ведёт себя приманка.</p>
+    <ul class="ap__flow">
+      <li>Собрали игру на&nbsp;компьютере</li><li class="ap__arrow">→</li>
+      <li>Сохранили файл .lure</li><li class="ap__arrow">→</li>
+      <li>Отправили на&nbsp;телефон: Telegram, почта или&nbsp;Bluetooth</li><li class="ap__arrow">→</li>
+      <li>В&nbsp;<span class="brand">пульте ICE-TICK</span>: «Пресеты» → «Импорт .lure»</li>
+    </ul>
+    <p>Перед импортом сначала подключитесь к&nbsp;<span class="brand">ICE-TICK</span>, затем загрузите файл и&nbsp;нажмите «Старт».</p>
+  </section>
+
+  <section class="ap__card">
+    <h2><span class="ap__tag">3</span>Дома, перед первой рыбалкой</h2>
+    <ul>
+      <li>Откройте <span class="brand">пульт ICE-TICK</span>, добавьте ярлык и&nbsp;один раз подключитесь к&nbsp;<span class="brand">ICE-TICK</span>.</li>
+      <li>Сохраните свои игры под&nbsp;мормышку, балансир или&nbsp;блесну.</li>
+      <li>Включите на&nbsp;телефоне режим полёта и&nbsp;откройте <span class="brand">пульт ICE-TICK</span> с&nbsp;ярлыка. Если он&nbsp;открылся&nbsp;— на&nbsp;льду интернет не&nbsp;понадобится.</li>
+    </ul>
+  </section>
+
+  <section class="ap__card">
+    <h2><span class="ap__tag">?</span>Если не подключается</h2>
+    <ul>
+      <li>Проверьте, что Bluetooth включён и&nbsp;браузеру разрешены «Устройства поблизости».</li>
+      <li>Убедитесь, что аккумулятор заряжен и&nbsp;<span class="brand">ICE-TICK</span> включён.</li>
+      <li><span class="brand">ICE-TICK</span> подключается только к&nbsp;одному телефону. Отключите его на&nbsp;другом телефоне.</li>
+      <li>Закройте <span class="brand">пульт ICE-TICK</span>, выключите и&nbsp;снова включите Bluetooth, попробуйте ещё раз.</li>
+      <li>Если <span class="brand">пульт ICE-TICK</span> не&nbsp;открывается без интернета, откройте его один раз со&nbsp;связью: он&nbsp;обновит сохранённую копию.</li>
+    </ul>
+    <p class="ap__note">Не получилось? Напишите нам: <a href="mailto:support@ice-tick.com">support@ice-tick.com</a>. Поможем разобраться.</p>
+  </section>
+</main>
+</body>
+</html>
